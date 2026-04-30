@@ -32,7 +32,7 @@ public class CourseCatalogEntity {
     @Column(name = "rating_count")
     private Integer ratingCount;
 
-    protected CourseCatalogEntity() {}
+    public CourseCatalogEntity() {}
 
     public String getCode() {
         return code;

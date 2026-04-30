@@ -34,6 +34,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ThemeMode.dark => _DarkModePref.on,
       ThemeMode.light => _DarkModePref.off,
     };
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AuthScope.of(context).refreshProfile();
+      }
+    });
   }
 
   bool get _prefsComplete =>
@@ -45,7 +50,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   List<RegistrationCourse> _userCourses() {
     final out = <RegistrationCourse>[];
-    for (final code in ProfileMockData.enrolledCourseCodes) {
+    final session = AuthSession.instance;
+    for (final code in session.enrolledCourseCodes) {
       for (final c in RegistrationMockData.courses) {
         if (c.code == code) out.add(c);
       }

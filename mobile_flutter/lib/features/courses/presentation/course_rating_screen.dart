@@ -42,28 +42,6 @@ class _CourseRatingScreenState extends State<CourseRatingScreen> {
 
   List<_MockCourse> _courses = [];
   bool _loadingList = true;
-  bool _listFromFallback = false;
-
-  static const _fallbackCourses = <_MockCourse>[
-    _MockCourse(
-      id: 'cse-344',
-      code: 'CSE344',
-      name: 'Software Engineering',
-      department: 'Computer Engineering',
-      difficultyRating: 4.2,
-      ratingCount: 145,
-      topics: ['Requirements Analysis', 'UML Diagrams', 'Software Design'],
-    ),
-    _MockCourse(
-      id: 'cse-331',
-      code: 'CSE331',
-      name: 'Database Systems',
-      department: 'Computer Engineering',
-      difficultyRating: 3.8,
-      ratingCount: 132,
-      topics: ['SQL', 'Normalization', 'Transactions'],
-    ),
-  ];
 
   @override
   void initState() {
@@ -74,29 +52,25 @@ class _CourseRatingScreenState extends State<CourseRatingScreen> {
   Future<void> _loadCourses() async {
     setState(() {
       _loadingList = true;
-      _listFromFallback = false;
     });
     try {
       final raw = await _courseApi.getCourses();
       final mapped = raw.map((e) => _parseCourseFromApi(Map<String, dynamic>.from(e))).whereType<_MockCourse>().toList();
       if (!mounted) return;
       setState(() {
-        _courses = mapped.isNotEmpty ? mapped : List.of(_fallbackCourses);
-        _listFromFallback = mapped.isEmpty;
+        _courses = mapped;
         _loadingList = false;
       });
     } on DioException {
       if (!mounted) return;
       setState(() {
-        _courses = List.of(_fallbackCourses);
-        _listFromFallback = true;
+        _courses = [];
         _loadingList = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _courses = List.of(_fallbackCourses);
-        _listFromFallback = true;
+        _courses = [];
         _loadingList = false;
       });
     }

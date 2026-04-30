@@ -128,8 +128,20 @@ public class ReservationService {
         record.setWorkspaceId(request.workspaceId());
         record.setDate(request.date());
         record.setSlotId(request.slotId());
-        // For slots like "slot-1", create a default label
-        record.setSlotLabel(request.slotId().replace("-", " ").toUpperCase());
+        
+        // Antigravity Modification: Use actual time ranges for labels as requested by user.
+        String label = switch (request.slotId()) {
+            case "slot-1" -> "06.00-09.00";
+            case "slot-2" -> "09.00-11.00";
+            case "slot-3" -> "11.00-13.00";
+            case "slot-4" -> "13.00-15.00";
+            case "slot-5" -> "15.00-17.00";
+            case "slot-6" -> "17.00-20.00";
+            case "slot-7" -> "20.00-23.00";
+            case "slot-8" -> "23.00-02.00";
+            default -> request.slotId().replace("-", " ").toUpperCase();
+        };
+        record.setSlotLabel(label);
         record.setStatus("ACTIVE"); // Auto active for now
         record.setCourseCode(request.courseCode());
         record.setQrPayload("QR_" + System.currentTimeMillis());

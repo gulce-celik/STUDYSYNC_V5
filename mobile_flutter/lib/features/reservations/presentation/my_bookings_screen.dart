@@ -20,7 +20,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   final _api = ReservationApi();
   final _dashboardApi = DashboardApi();
 
-  List<ReservationDetail> _all = [];
+  List<ReservationDetail>? _all;
   final Set<String> _demoCheckedInIds = <String>{};
   bool _loading = true;
   _BookingsTab _tab = _BookingsTab.active;
@@ -39,13 +39,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       final remote = await _api.getMyReservations();
       if (!mounted) return;
       setState(() {
-        _all = remote.isNotEmpty ? remote : BookingsMockData.sampleBookings();
+        _all = remote;
         _loading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _all = BookingsMockData.sampleBookings();
+        _all = null; // fallback to mock on error if desired, or empty
         _loading = false;
       });
     }
@@ -64,12 +64,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   bool _isCheckedIn(ReservationDetail r) => r.checkedIn || _demoCheckedInIds.contains(r.id);
 
   List<ReservationDetail> get _visible {
+    if (_all == null) return BookingsMockData.sampleBookings(); // Show mock ONLY if error occurred
     if (_tab == _BookingsTab.active) {
-      return _all.where(_isActiveTab).toList();
+      return _all!.where(_isActiveTab).toList();
     }
-    final history = _all.where(_isHistoryTab).toList();
-    if (history.isNotEmpty) return history;
-    return BookingsMockData.sampleBookings().where(_isHistoryTab).toList();
+    return _all!.where(_isHistoryTab).toList();
   }
 
   (Color bg, Color fg) _statusStyle(String status) {

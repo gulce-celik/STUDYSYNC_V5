@@ -48,7 +48,7 @@ public class WeeklyScheduleBlockEntity {
     @Column(length = 64)
     private String label;
 
-    protected WeeklyScheduleBlockEntity() {}
+    public WeeklyScheduleBlockEntity() {}
 
     public Long getId() {
         return id;

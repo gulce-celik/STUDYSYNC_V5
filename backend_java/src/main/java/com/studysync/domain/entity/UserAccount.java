@@ -8,8 +8,13 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.FetchType;
 import java.util.Collection;
 import java.util.List;
+import java.util.ArrayList;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -57,6 +62,11 @@ public class UserAccount implements UserDetails {
 
     @Column(name = "responsibility_score")
     private Integer responsibilityScore = 75;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_enrolled_courses", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "course_code")
+    private List<String> enrolledCourses = new ArrayList<>();
 
     // Antigravity Modification: Changed constructor from protected to public to fix compilation visibility errors
     public UserAccount() {}
@@ -119,6 +129,14 @@ public class UserAccount implements UserDetails {
 
     public void setResponsibilityScore(Integer responsibilityScore) {
         this.responsibilityScore = responsibilityScore;
+    }
+
+    public List<String> getEnrolledCourses() {
+        return enrolledCourses;
+    }
+
+    public void setEnrolledCourses(List<String> enrolledCourses) {
+        this.enrolledCourses = enrolledCourses;
     }
 
     // --- UserDetails Methods ---

@@ -5,7 +5,11 @@ package com.studysync.api.auth;
 import com.studysync.domain.dto.LoginRequestDto;
 import com.studysync.domain.dto.LoginResponseDto;
 import com.studysync.domain.service.AuthService;
+import com.studysync.domain.dto.UserSummaryDto;
+import com.studysync.domain.entity.UserAccount;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,5 +33,10 @@ public class AuthController {
     @PostMapping("/login")
     public LoginResponseDto login(@Valid @RequestBody LoginRequestDto request) {
         return authService.login(request);
+    }
+
+    @GetMapping("/me")
+    public UserSummaryDto getMe(@AuthenticationPrincipal UserAccount currentUser) {
+        return authService.getCurrentUser(currentUser);
     }
 }

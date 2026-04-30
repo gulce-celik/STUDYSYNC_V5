@@ -12,6 +12,7 @@ class AuthSession {
   String? userDepartment;
   int? userYear;
   int? userScore;
+  List<String> enrolledCourseCodes = [];
 
   void clear() {
     accessToken = null;
@@ -22,5 +23,7 @@ class AuthSession {
     userEmail = null;
     userDepartment = null;
     userYear = null;
+    userScore = null;
+    enrolledCourseCodes = [];
   }
 }

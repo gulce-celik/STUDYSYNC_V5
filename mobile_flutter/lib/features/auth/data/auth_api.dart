@@ -77,4 +77,10 @@ class AuthApi {
       user: m['user'] is Map<String, dynamic> ? m['user'] as Map<String, dynamic> : null,
     );
   }
+
+  /// [GET /auth/me] — Mevcut kullanıcının en güncel verilerini (skor vb.) çeker.
+  Future<Map<String, dynamic>> getMe() async {
+    final response = await ApiClient.instance.dio.get<Map<String, dynamic>>('/auth/me');
+    return response.data ?? {};
+  }
 }

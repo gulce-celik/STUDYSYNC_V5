@@ -7,4 +7,14 @@ package com.studysync.domain.dto;
  *
  * <p>{@code department}: görünen isim (ör. "Computer Engineering"); {@code UserAccount#departmentId} katalogdan çözülür.
  */
-public record UserSummaryDto(String id, String name, String nickname, String email, String department, Integer year, Integer responsibilityScore) {}
+import java.util.List;
+
+public record UserSummaryDto(
+        String id,
+        String name,
+        String nickname,
+        String email,
+        String department,
+        Integer year,
+        Integer responsibilityScore,
+        List<String> enrolledCourses) {}

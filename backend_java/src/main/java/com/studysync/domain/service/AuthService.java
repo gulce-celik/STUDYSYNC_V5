@@ -72,7 +72,8 @@ public class AuthService {
                 userAccount.getEmail(),
                 deptName,
                 userAccount.getYear(),
-                userAccount.getResponsibilityScore());
+                userAccount.getResponsibilityScore(),
+                userAccount.getEnrolledCourses());
 
         return new LoginResponseDto(accessToken, refreshToken, summary);
     }
@@ -105,6 +106,9 @@ public class AuthService {
         u.setDepartmentId(request.departmentId());
         u.setYear(request.year());
         u.setResponsibilityScore(75);
+        if (request.selectedCourseCodes() != null) {
+            u.setEnrolledCourses(new java.util.ArrayList<>(request.selectedCourseCodes()));
+        }
         userAccountRepository.save(u);
         final String deptName = referenceCatalogService
                 .resolveDepartmentName(u.getDepartmentId())
@@ -116,7 +120,8 @@ public class AuthService {
                 u.getEmail(),
                 deptName,
                 u.getYear(),
-                u.getResponsibilityScore());
+                u.getResponsibilityScore(),
+                u.getEnrolledCourses());
 
         String accessToken = jwtTokenProvider.createAccessTokenForUserId(u.getId());
         String refreshToken = jwtTokenProvider.createRefreshTokenValue();
@@ -127,5 +132,21 @@ public class AuthService {
     /** Refresh token doğrula, rotation, yeni access üret. */
     public LoginResponseDto refresh(String refreshToken) {
         throw new UnsupportedOperationException("TODO: RefreshTokenRepository + JwtTokenProvider rotation");
+    }
+
+    public UserSummaryDto getCurrentUser(UserAccount currentUser) {
+        final String deptName = referenceCatalogService
+                .resolveDepartmentName(currentUser.getDepartmentId())
+                .orElse(currentUser.getDepartmentId());
+
+        return new UserSummaryDto(
+                String.valueOf(currentUser.getId()),
+                currentUser.getName(),
+                currentUser.getNickname(),
+                currentUser.getEmail(),
+                deptName,
+                currentUser.getYear(),
+                currentUser.getResponsibilityScore(),
+                currentUser.getEnrolledCourses());
     }
 }

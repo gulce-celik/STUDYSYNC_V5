@@ -43,7 +43,7 @@ public class UserCourseRatingEntity {
     @Column(nullable = false)
     private Instant createdAt;
 
-    protected UserCourseRatingEntity() {}
+    public UserCourseRatingEntity() {}
 
     public Long getId() {
         return id;

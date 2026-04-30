@@ -144,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final firstName = _firstNameForGreeting();
-    final upcoming = (_apiUpcomingReservations != null && _apiUpcomingReservations!.isNotEmpty)
+    final upcoming = _apiUpcomingReservations != null
         ? _apiUpcomingReservations!
         : HomeMockData.upcomingReservations;
     final sessions = _apiTotalReservations ?? 8;
