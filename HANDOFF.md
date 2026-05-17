@@ -38,7 +38,7 @@
 
 ## Frontend work log (mobile_flutter only)
 
-### 2026-05-17 — Summary
+### 2026-05-16 — Summary
 
 **Frontend (done, `mobile_flutter/` only)**  
 - **Admin:** Staff login + shell (Overview / Students / Booking / Reports / Admins), navy `AdminUi`, English live/mock banner, JWT bridge for live map, student detail + warn/restrict (3 kinds, session), desk heatmap + tap-to-close, map layout sliders + mini preview, reports merge `BuddyInteractionLog`, Admins roster grant/revoke.  
