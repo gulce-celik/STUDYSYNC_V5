@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/session/auth_session.dart';
+import '../../auth/data/auth_api.dart';
 import '../../auth/data/registration_mock_data.dart';
 import '../../courses/data/course_api.dart';
 
@@ -87,7 +88,7 @@ class _EditEnrolledCoursesSheetState extends State<_EditEnrolledCoursesSheet> {
     }
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (_selected.isEmpty) {
       setState(() {
         _inlineMessage = 'Select at least one course.';
@@ -102,8 +103,19 @@ class _EditEnrolledCoursesSheetState extends State<_EditEnrolledCoursesSheet> {
       _isError = false;
     });
 
-    AuthSession.instance.enrolledCourseCodes = _selected.toList()..sort();
-    widget.onSaved();
+    try {
+      await AuthApi().updateMyCourses(_selected.toList());
+      if (!mounted) return;
+      AuthSession.instance.enrolledCourseCodes = _selected.toList()..sort();
+      widget.onSaved();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _inlineMessage = 'Could not save to server. Please try again.';
+        _isError = true;
+      });
+    }
   }
 
   @override
@@ -131,8 +143,7 @@ class _EditEnrolledCoursesSheetState extends State<_EditEnrolledCoursesSheet> {
             ],
           ),
           const Text(
-            'Updates apply in this app session (reservation & buddy filters). '
-            'Server profile sync needs a future backend API.',
+            'Changes are saved to your profile and applied in this session.',
             style: TextStyle(fontSize: 11, height: 1.35, color: Color(0xFF6B7280)),
           ),
           const SizedBox(height: 12),
