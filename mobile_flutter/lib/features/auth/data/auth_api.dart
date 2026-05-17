@@ -149,4 +149,12 @@ class AuthApi {
       },
     );
   }
+
+  /// [PUT /auth/me/courses] — Kullanıcının kayıtlı ders listesini kalıcı olarak günceller.
+  Future<void> updateMyCourses(List<String> courses) async {
+    await ApiClient.instance.dio.put<void>(
+      '/auth/me/courses',
+      data: {'courses': courses},
+    );
+  }
 }

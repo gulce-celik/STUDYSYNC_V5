@@ -15,7 +15,7 @@
 ## 🐛 Bug Fixes & Current Issues
 
 - [ ] **Password Change:** Password change process works, but the error screen continues to show in the background.
-- [ ] **Course Edit:** The course edit function is not working.
+- [X] **Course Edit:** The course edit function is not working.
 - [ ] **Check-in System:** Check-in can be done at any time. **Rule:** If check-in is not completed within the first 15 minutes, the reservation must be automatically canceled.
 - [ ] **Email Verification/Delivery:** Emails containing verification/password codes are not being delivered.
 - [ ] **Duplicate Email Registration:** The check for accounts with the same email is done too late. (Should be validated earlier / on the frontend).

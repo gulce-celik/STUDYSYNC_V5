@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.ResponseEntity;
 import com.studysync.domain.dto.ChangePasswordRequestDto;
+import com.studysync.domain.dto.UpdateCoursesRequestDto;
 
 /**
  * HTTP: POST /api/v1/auth/login
@@ -48,6 +49,14 @@ public class AuthController {
             @AuthenticationPrincipal UserAccount currentUser,
             @Valid @RequestBody ChangePasswordRequestDto request) {
         authService.changePassword(currentUser, request);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/me/courses")
+    public ResponseEntity<Void> updateCourses(
+            @AuthenticationPrincipal UserAccount currentUser,
+            @Valid @RequestBody UpdateCoursesRequestDto request) {
+        authService.updateEnrolledCourses(currentUser, request);
         return ResponseEntity.ok().build();
     }
 }

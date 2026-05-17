@@ -5,6 +5,7 @@ package com.studysync.domain.service;
 import com.studysync.domain.dto.LoginRequestDto;
 import com.studysync.domain.dto.LoginResponseDto;
 import com.studysync.domain.dto.RegisterRequestDto;
+import com.studysync.domain.dto.UpdateCoursesRequestDto;
 import com.studysync.domain.dto.UserSummaryDto;
 import com.studysync.domain.dto.ChangePasswordRequestDto;
 import com.studysync.domain.entity.UserAccount;
@@ -16,6 +17,7 @@ import com.studysync.security.JwtTokenProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 
 /**
  * Kimlik doğrulama ve kayıt — login JWT, refresh akışı, e-posta tekilliği.
@@ -158,5 +160,19 @@ public class AuthService {
         }
         currentUser.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         userAccountRepository.save(currentUser);
+    }
+
+    @Transactional
+    public void updateEnrolledCourses(UserAccount currentUser, UpdateCoursesRequestDto request) {
+        // @AuthenticationPrincipal ile gelen nesne detached olabilir;
+        // veritabanından managed entity yükleyerek Hibernate takibini garanti ediyoruz.
+        UserAccount managed = userAccountRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new RuntimeException("User not found: " + currentUser.getId()));
+        
+        List<String> incoming = request.courses() != null ? request.courses() : List.of();
+        managed.getEnrolledCourses().clear();
+        managed.getEnrolledCourses().addAll(incoming);
+        
+        userAccountRepository.saveAndFlush(managed);
     }
 }
