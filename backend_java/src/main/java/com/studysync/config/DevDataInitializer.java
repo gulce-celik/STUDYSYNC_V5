@@ -13,7 +13,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 
+import org.springframework.context.annotation.Profile;
+
 @Configuration
+@Profile("dev")
 public class DevDataInitializer {
 
     @Bean

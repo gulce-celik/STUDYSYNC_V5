@@ -44,14 +44,12 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- DEMO SONRASI ICIN: PostgreSQL Bagimliligi (Su an H2 kullanildigi icin yorum satirinda) -->
-        <!-- 
+        <!-- PostgreSQL JDBC Sürücüsü (Canlı Ortam / prod profili) -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
-        -->
         <!-- Antigravity Modification: Imported jjwt logic for stateless REST authentication instead of session cookies -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
