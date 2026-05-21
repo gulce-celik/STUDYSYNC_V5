@@ -38,6 +38,20 @@
 
 ## Frontend work log (mobile_flutter only)
 
+### 2026-05-21 (Live Deployment & Shared DB)
+
+**Infrastructure & Backend (`backend_java/`)**
+- **Production Database:** Transitioned from strictly local H2 to a live **Neon.tech** PostgreSQL database for team testing.
+- **Spring Profiles:** Added `dev` (H2) and `prod` (PostgreSQL) profiles in `application.yml`. Added `@Profile("dev")` to `DevDataInitializer` so fake data is not injected into the live production database.
+- **Dockerization:** Added multi-stage `Dockerfile` (JDK 21 build -> JRE runtime) and `.dockerignore` for Render.com deployment.
+- **Live Deployment:** Successfully deployed the backend to Render.com free tier. Live API base URL: `https://studysync-56nq.onrender.com/api/v1`.
+
+**Mobile (`mobile_flutter/`)**
+- **Permanent Live Server (Team Shared DB):** Modified `app_config.dart` to always return the `_productionUrl` regardless of `kDebugMode`. This allows the 7-person team to share the central Neon database and see each other's actions during development.
+- **Cold Start Timeout Fix:** Increased `connectTimeout` and `receiveTimeout` in `api_client.dart` from 12s to 60s. This is critical to prevent "Cannot reach backend" errors when Render's free tier spins down and takes ~50 seconds to wake up upon the first request.
+
+------------------------------------------------------------------------------
+
 ### 2026-05-16 - 2026-05-17 — Summary
 
 **Frontend (done, `mobile_flutter/` only)**  
