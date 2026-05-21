@@ -6,9 +6,9 @@ class AppConfig {
   /// `--dart-define=API_BASE=http://192.168.1.5:8080/api/v1` ile fiziksel cihaz / özel ortam.
   static const String _fromEnv = String.fromEnvironment('API_BASE', defaultValue: '');
 
-  /// Canlı sunucu URL'si (Render.com) — deploy sonrası gerçek URL ile güncellenir.
+  /// Canlı sunucu URL'si (Render.com)
   static const String _productionUrl =
-      'https://studysync-backend.onrender.com/api/v1';
+      'https://studysync-56nq.onrender.com/api/v1';
 
   /// Spring Boot iskeleti: `/api/v1` önekli.
   /// - **Android emülatör (debug):** `10.0.2.2` = geliştirme makinenin `localhost`'u.
