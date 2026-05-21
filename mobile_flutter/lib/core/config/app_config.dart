@@ -21,14 +21,8 @@ class AppConfig {
     // 1) Compile-time override varsa onu kullan
     if (_fromEnv.isNotEmpty) return _fromEnv;
 
-    // 2) Debug modda → yerel geliştirme sunucusu
-    if (kDebugMode) {
-      if (kIsWeb) return 'http://localhost:8080/api/v1';
-      if (Platform.isAndroid) return 'http://10.0.2.2:8080/api/v1';
-      return 'http://localhost:8080/api/v1';
-    }
-
-    // 3) Release modda → canlı sunucu
+    // Tüm ekip üyeleri geliştirme aşamasında da ortak canlı sunucuyu ve 
+    // ortak Neon veritabanını kullanmak istediği için her durumda canlı URL döndürülür:
     return _productionUrl;
   }
 }
