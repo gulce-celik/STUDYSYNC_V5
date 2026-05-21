@@ -1,0 +1,8 @@
+target/
+.git
+.idea
+*.iml
+scratch/
+api-tests.http
+reservation_test.ps1
+.vscode/
