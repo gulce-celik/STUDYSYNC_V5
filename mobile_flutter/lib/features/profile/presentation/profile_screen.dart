@@ -2,12 +2,17 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_scope.dart';
+import '../../../core/network/dashboard_api.dart';
 import '../../../core/planner/ai_study_controller.dart';
 import '../../../core/session/auth_session.dart';
 import '../../../core/trust/responsibility_ledger.dart';
 import '../../../core/theme/theme_mode_controller.dart';
+import '../../../shared/navigation/app_tab_controller.dart';
 import '../../auth/data/registration_mock_data.dart';
 import '../../auth/data/auth_api.dart';
+import '../../reservation/data/reservation_api.dart';
+import '../../reservation/domain/reservation_models.dart';
+import '../../../shared/reservations/reservation_score.dart';
 import '../data/profile_mock_data.dart';
 import 'edit_enrolled_courses_sheet.dart';
 
@@ -27,6 +32,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _preferredDays;
   _DarkModePref _darkMode = _DarkModePref.off;
 
+  List<ProfileScoreEntry> _scoreHistory = [];
+  bool _scoreHistoryLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -36,11 +44,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ThemeMode.dark => _DarkModePref.on,
       ThemeMode.light => _DarkModePref.off,
     };
+    AppTabController.instance.addListener(_onProfileTabSelected);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         AuthScope.of(context).refreshProfile();
+        _refreshProfileData();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    AppTabController.instance.removeListener(_onProfileTabSelected);
+    super.dispose();
+  }
+
+  static const int _profileTabIndex = 4;
+
+  void _onProfileTabSelected() {
+    if (AppTabController.instance.currentIndex == _profileTabIndex && mounted) {
+      _refreshProfileData();
+    }
+  }
+
+  Future<void> _refreshProfileData() async {
+    await Future.wait([
+      _loadScoreHistory(),
+      _syncResponsibilityScore(),
+    ]);
+  }
+
+  Future<void> _syncResponsibilityScore() async {
+    try {
+      final dashboard = await DashboardApi().getHome();
+      final scoreRaw = dashboard['responsibilityScore'];
+      if (scoreRaw is num && mounted) {
+        ResponsibilityLedger.instance.setHomeContext(mockOnly: scoreRaw.toInt());
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadScoreHistory() async {
+    setState(() => _scoreHistoryLoading = true);
+    try {
+      final list = await ReservationApi().getMyReservations();
+      if (!mounted) return;
+      final entries = <ProfileScoreEntry>[];
+      for (final ReservationDetail r in list) {
+        if (!ReservationScore.isTerminalStatus(r.status)) continue;
+        final delta = ReservationScore.resolve(r);
+        if (delta == null) continue;
+        entries.add(
+          ProfileScoreEntry(
+            id: r.id,
+            date: r.date,
+            scoreChange: delta,
+            description: ReservationScore.descriptionFor(r, delta),
+          ),
+        );
+      }
+      entries.sort((a, b) => b.date.compareTo(a.date));
+      setState(() {
+        _scoreHistory = entries;
+        _scoreHistoryLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _scoreHistory = [];
+        _scoreHistoryLoading = false;
+      });
+    }
   }
 
   bool get _prefsComplete =>
@@ -496,44 +570,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 200),
-                        child: ListView(
-                          shrinkWrap: true,
-                          children: ProfileMockData.scoreHistory.map((e) {
-                            final pos = e.scoreChange >= 0;
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: mutedSurface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: borderColor),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(pos ? Icons.trending_up_rounded : Icons.trending_down_rounded, size: 18, color: pos ? const Color(0xFF22C55E) : const Color(0xFFDC2626)),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(e.description, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                                        Text(e.date, style: TextStyle(fontSize: 9, color: Colors.grey.shade500)),
-                                      ],
+                      if (_scoreHistoryLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+                        )
+                      else if (_scoreHistory.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'No scored events yet. Check in, cancel, or complete a booking to see history here.',
+                            style: TextStyle(fontSize: 11, height: 1.35, color: Colors.grey.shade600),
+                          ),
+                        )
+                      else
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          child: ListView(
+                            shrinkWrap: true,
+                            children: _scoreHistory.map((e) {
+                              final pos = e.scoreChange > 0;
+                              final zero = e.scoreChange == 0;
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: mutedSurface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: borderColor),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      zero
+                                          ? Icons.remove_rounded
+                                          : pos
+                                              ? Icons.trending_up_rounded
+                                              : Icons.trending_down_rounded,
+                                      size: 18,
+                                      color: zero
+                                          ? const Color(0xFF6B7280)
+                                          : pos
+                                              ? const Color(0xFF22C55E)
+                                              : const Color(0xFFDC2626),
                                     ),
-                                  ),
-                                  Text(
-                                    '${pos ? '+' : ''}${e.scoreChange}%',
-                                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: pos ? const Color(0xFF16A34A) : const Color(0xFFDC2626)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(e.description, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                          Text(e.date, style: TextStyle(fontSize: 9, color: Colors.grey.shade500)),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      ReservationScore.formatDelta(e.scoreChange),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12,
+                                        color: zero
+                                            ? const Color(0xFF374151)
+                                            : pos
+                                                ? const Color(0xFF16A34A)
+                                                : const Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),

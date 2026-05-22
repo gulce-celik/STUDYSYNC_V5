@@ -5,6 +5,7 @@ import '../../../core/network/dashboard_api.dart';
 import '../../../core/trust/responsibility_ledger.dart';
 import '../../../shared/check_in/check_in_window.dart';
 import '../../../shared/check_in/reservation_check_in_sheet.dart';
+import '../../../shared/reservations/reservation_score.dart';
 import '../../reservation/data/reservation_api.dart';
 import '../../reservation/domain/reservation_models.dart';
 import '../data/bookings_mock_data.dart';
@@ -96,7 +97,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
   int? _scoreImpact(ReservationDetail r) {
     if (!_isHistoryTab(r)) return null;
-    return r.scoreChange;
+    return ReservationScore.resolve(r);
   }
 
   String _scoreImpactLabel(int delta) {
