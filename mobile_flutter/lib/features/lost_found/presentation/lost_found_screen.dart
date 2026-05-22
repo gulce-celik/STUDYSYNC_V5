@@ -161,7 +161,9 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
       }
     } on DioException catch (e) {
       if (!mounted) return;
-      final msg = e.response?.data?['message']?.toString() ?? 'PATCH /lost-found failed';
+      final defaultSpringError = e.response?.data?['error']?.toString();
+      final message = e.response?.data?['message']?.toString();
+      final msg = message ?? defaultSpringError ?? 'PATCH /lost-found failed (Status: ${e.response?.statusCode})';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg)),
       );
