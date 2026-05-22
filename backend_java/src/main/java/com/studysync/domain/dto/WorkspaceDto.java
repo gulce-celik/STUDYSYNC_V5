@@ -14,6 +14,7 @@ public record WorkspaceDto(
         Integer capacity,
         String status,
         Integer x,
-        Integer y
+        Integer y,
+        String qrCode
 ) {
 }

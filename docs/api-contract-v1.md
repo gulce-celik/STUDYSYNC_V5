@@ -65,6 +65,7 @@ default is `http://localhost:8080/api/v1` on iOS simulator / desktop; on **Andro
   - response:
     - `success` (boolean)
     - `message` (string)
+  - policy: allowed only on the reservation date, from **15 minutes before** slot start until **15 minutes after** slot start; QR must match the desk `qrCode`.
 
 ## Study Buddy
 
@@ -115,8 +116,8 @@ Used by the mobile weekly grid so study-time suggestions can avoid marked slots.
 
 - `UserSummary`: `id`, `name`, `nickname`, `email`, `department`, `year`
 - `ReservationSummary`: `id`, `workspaceId`, `date`, `slotLabel`, `status`
-- `Workspace`: `id`, `type`, `capacity`, `status`, `x`, `y`
-- `ReservationDetail`: `id`, `workspaceId`, `date`, `slotId`, `slotLabel`, `status`, `courseCode`, `participants`
+- `Workspace`: `id`, `type`, `capacity`, `status`, `x`, `y`, `qrCode` (static 4-digit: `desk-N` → `1000+N`, `group-N` → `2000+N`)
+- `ReservationDetail`: `id`, `workspaceId`, `date`, `slotId`, `slotLabel`, `status`, `courseCode`, `participants`, `qrPayload` (4-digit desk QR; same as workspace `qrCode`)
 - `StudyBuddySuggestion`: `userId`, `name`, `matchScore`, `commonCourses`, `commonTopics`
 - `Course`: `code`, `name`, `difficultyRating`, `ratingCount`
 - `LostItem`: `id`, `workspaceId`, `description`, `reportedAt`

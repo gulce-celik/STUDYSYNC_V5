@@ -80,19 +80,14 @@ class _ReservationCheckInSheetState extends State<_ReservationCheckInSheet> {
     if (_loading) return;
 
     final r = widget.reservation;
-    if (!CheckInWindow.isReservationToday(r)) {
+    if (!CheckInWindow.canCheckInNow(r)) {
+      final hint = CheckInWindow.availabilityHint(r);
       _setMessage(
-        'Check-in is only available on your reservation date (${r.date}).',
+        hint ??
+            'Check-in is only available from 15 minutes before until 15 minutes after your slot start.',
         isError: true,
       );
       return;
-    }
-
-    if (CheckInWindow.isPastGraceWindow(r)) {
-      _setMessage(
-        'This slot may be past the 15-minute check-in window. You can still try; the server decides.',
-        isError: false,
-      );
     }
 
     final payload = _payloadCtrl.text.trim();
@@ -199,9 +194,12 @@ class _ReservationCheckInSheetState extends State<_ReservationCheckInSheet> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Check in within 15 minutes of slot start when possible.',
-            style: TextStyle(fontSize: 11, height: 1.35, color: Color(0xFF6B7280)),
+          Text(
+            CheckInWindow.canCheckInNow(r)
+                ? 'Enter the 4-digit desk QR. Window closes 15 minutes after slot start.'
+                : (CheckInWindow.availabilityHint(r) ??
+                    'Check-in opens 15 minutes before your slot start.'),
+            style: const TextStyle(fontSize: 11, height: 1.35, color: Color(0xFF6B7280)),
           ),
           if (_inlineMessage != null) ...[
             const SizedBox(height: 10),
@@ -216,7 +214,7 @@ class _ReservationCheckInSheetState extends State<_ReservationCheckInSheet> {
           ],
           const SizedBox(height: 14),
           FilledButton.icon(
-            onPressed: _loading ? null : _submit,
+            onPressed: (_loading || !CheckInWindow.canCheckInNow(r)) ? null : _submit,
             icon: _loading
                 ? const SizedBox(
                     width: 18,

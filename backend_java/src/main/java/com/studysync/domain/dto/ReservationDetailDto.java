@@ -17,6 +17,7 @@ public record ReservationDetailDto(
         String slotLabel,
         String status,
         String courseCode,
-        List<String> participants
+        List<String> participants,
+        String qrPayload
 ) {
 }

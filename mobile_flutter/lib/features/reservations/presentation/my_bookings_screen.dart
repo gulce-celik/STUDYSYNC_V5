@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/network/dashboard_api.dart';
 import '../../../core/trust/responsibility_ledger.dart';
+import '../../../shared/check_in/check_in_window.dart';
 import '../../../shared/check_in/reservation_check_in_sheet.dart';
 import '../../reservation/data/reservation_api.dart';
 import '../../reservation/domain/reservation_models.dart';
@@ -153,6 +154,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   }
 
   void _openCheckIn(ReservationDetail r) {
+    if (!CheckInWindow.canCheckInNow(r)) {
+      final hint = CheckInWindow.availabilityHint(r);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(hint ?? 'Check-in is not available right now.')),
+      );
+      return;
+    }
     if (_usingOfflineMock) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -252,7 +260,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           border: Border.all(color: const Color(0xFFFDE68A)),
                         ),
                         child: const Text(
-                          'Check in with QR in the first 15 minutes. Late check-ins may cause cancellation risk.',
+                          'QR check-in opens 15 minutes before your slot and closes 15 minutes after it starts.',
                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.35),
                         ),
                       ),
@@ -356,26 +364,46 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                     ),
                                   ],
                                   const SizedBox(height: 12),
-                                  Row(
-                                    children: [
-                                      if (_isActiveTab(r) && !_isCheckedIn(r))
+                                  if (_isActiveTab(r) && !_isCheckedIn(r)) ...[
+                                    Row(
+                                      children: [
                                         Expanded(
                                           child: OutlinedButton.icon(
-                                            onPressed: () => _openCheckIn(r),
+                                            onPressed:
+                                                CheckInWindow.canCheckInNow(r) ? () => _openCheckIn(r) : null,
                                             icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
                                             label: const Text('QR Check-In'),
                                           ),
                                         ),
-                                      if (_isActiveTab(r) && !_isCheckedIn(r)) const SizedBox(width: 8),
-                                      if (_isActiveTab(r) && (r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE'))
+                                        const SizedBox(width: 8),
+                                        if (r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE')
+                                          Expanded(
+                                            child: OutlinedButton(
+                                              onPressed: () => _cancel(r),
+                                              child: const Text('Cancel'),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    if (CheckInWindow.availabilityHint(r) != null) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        CheckInWindow.availabilityHint(r)!,
+                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                      ),
+                                    ],
+                                  ] else if (_isActiveTab(r) &&
+                                      (r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE'))
+                                    Row(
+                                      children: [
                                         Expanded(
                                           child: OutlinedButton(
                                             onPressed: () => _cancel(r),
                                             child: const Text('Cancel'),
                                           ),
                                         ),
-                                    ],
-                                  ),
+                                      ],
+                                    ),
                                 ],
                               ),
                             ),

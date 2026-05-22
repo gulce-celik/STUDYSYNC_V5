@@ -11,6 +11,7 @@ class HomeMockData {
       workspaceId: 'desk-5',
       date: '2026-03-10',
       timeSlot: '10:00 - 12:00',
+      slotId: 'slot-2',
       type: ReservationKind.individual,
     ),
     HomeUpcomingReservation(
@@ -18,6 +19,7 @@ class HomeMockData {
       workspaceId: 'desk-12',
       date: '2026-03-11',
       timeSlot: '14:00 - 16:00',
+      slotId: 'slot-4',
       type: ReservationKind.individual,
     ),
   ];
@@ -44,6 +46,7 @@ class HomeUpcomingReservation {
     required this.workspaceId,
     required this.date,
     required this.timeSlot,
+    this.slotId = '',
     required this.type,
   });
 
@@ -51,6 +54,7 @@ class HomeUpcomingReservation {
   final String workspaceId;
   final String date;
   final String timeSlot;
+  final String slotId;
   final ReservationKind type;
 }
 

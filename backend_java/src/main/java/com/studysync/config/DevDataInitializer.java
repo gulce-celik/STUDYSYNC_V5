@@ -1,5 +1,6 @@
 package com.studysync.config;
 
+import com.studysync.domain.campus.WorkspaceQrRegistry;
 import com.studysync.domain.entity.CourseCatalogEntity;
 import com.studysync.domain.entity.ReservationRecord;
 import com.studysync.domain.entity.UserAccount;
@@ -23,7 +24,8 @@ public class DevDataInitializer {
     public CommandLineRunner initDevData(UserAccountRepository userRepository,
             ReservationRecordRepository reservationRepository,
             CourseCatalogRepository courseRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            WorkspaceQrRegistry workspaceQrRegistry) {
         return args -> {
             if (courseRepository.count() == 0) {
                 CourseCatalogEntity c1 = new CourseCatalogEntity();
@@ -268,7 +270,7 @@ public class DevDataInitializer {
                     r1.setSlotLabel("11.00-13.00");
                     r1.setStatus("ACTIVE");
                     r1.setCourseCode("CSE344");
-                    r1.setQrPayload("QR_" + System.currentTimeMillis() + "_1");
+                    r1.setQrPayload(workspaceQrRegistry.qrFor("desk-5"));
 
                     ReservationRecord r2 = new ReservationRecord();
                     r2.setUser(bob);
@@ -278,7 +280,7 @@ public class DevDataInitializer {
                     r2.setSlotLabel("11.00-13.00");
                     r2.setStatus("ACTIVE");
                     r2.setCourseCode("MATH131");
-                    r2.setQrPayload("QR_" + System.currentTimeMillis() + "_2");
+                    r2.setQrPayload(workspaceQrRegistry.qrFor("group-2"));
                     r2.setParticipantsJson("[\"Alice\"]");
 
                     ReservationRecord r3 = new ReservationRecord();
@@ -289,7 +291,7 @@ public class DevDataInitializer {
                     r3.setSlotLabel("15.00-17.00");
                     r3.setStatus("ACTIVE");
                     r3.setCourseCode("CSE331");
-                    r3.setQrPayload("QR_" + System.currentTimeMillis() + "_3");
+                    r3.setQrPayload(workspaceQrRegistry.qrFor("desk-12"));
 
                     ReservationRecord r4 = new ReservationRecord();
                     r4.setUser(charlie);
@@ -299,7 +301,7 @@ public class DevDataInitializer {
                     r4.setSlotLabel("09.00-11.00");
                     r4.setStatus("ACTIVE");
                     r4.setCourseCode("MATH221");
-                    r4.setQrPayload("QR_" + System.currentTimeMillis() + "_4");
+                    r4.setQrPayload(workspaceQrRegistry.qrFor("desk-1"));
 
                     ReservationRecord r5 = new ReservationRecord();
                     r5.setUser(charlie);
@@ -309,7 +311,7 @@ public class DevDataInitializer {
                     r5.setSlotLabel("11.00-13.00");
                     r5.setStatus("ACTIVE");
                     r5.setCourseCode("MATH281");
-                    r5.setQrPayload("QR_" + System.currentTimeMillis() + "_5");
+                    r5.setQrPayload(workspaceQrRegistry.qrFor("desk-7"));
 
                     reservationRepository.saveAll(List.of(r1, r2, r3, r4, r5));
                 }

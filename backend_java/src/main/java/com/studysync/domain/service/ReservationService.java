@@ -2,6 +2,7 @@
 
 package com.studysync.domain.service;
 
+import com.studysync.domain.campus.WorkspaceQrRegistry;
 import com.studysync.domain.dto.ActionResultDto;
 import com.studysync.domain.dto.CreateReservationRequestDto;
 import com.studysync.domain.dto.ReservationDetailDto;
@@ -64,27 +65,37 @@ public class ReservationService {
     private final ReservationRecordRepository reservationRepository;
     private final ResponsibilityScoreService responsibilityScoreService;
     private final ObjectMapper objectMapper;
+    private final WorkspaceQrRegistry workspaceQrRegistry;
 
     public ReservationService(CancellationScoringPolicy cancellationScoringPolicy,
             ReservationRecordRepository reservationRepository,
             ResponsibilityScoreService responsibilityScoreService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            WorkspaceQrRegistry workspaceQrRegistry) {
         this.cancellationScoringPolicy = cancellationScoringPolicy;
         this.reservationRepository = reservationRepository;
         this.responsibilityScoreService = responsibilityScoreService;
         this.objectMapper = objectMapper;
+        this.workspaceQrRegistry = workspaceQrRegistry;
     }
 
     private List<WorkspaceDto> generateWorkspaces() {
         List<WorkspaceDto> list = new java.util.ArrayList<>();
         for (int i = 0; i < 24; i++) {
-            list.add(new WorkspaceDto("desk-" + (i + 1), "individual", 1, "available", 12 + (i % 8) * 40, 35 + (i / 8) * 65));
+            String id = "desk-" + (i + 1);
+            list.add(new WorkspaceDto(
+                    id, "individual", 1, "available", 12 + (i % 8) * 40, 35 + (i / 8) * 65,
+                    workspaceQrRegistry.qrFor(id)));
         }
-        list.add(new WorkspaceDto("group-1", "group", 4, "available", 12, 265));
-        list.add(new WorkspaceDto("group-2", "group", 4, "available", 89, 265));
-        list.add(new WorkspaceDto("group-3", "group", 6, "available", 166, 265));
-        list.add(new WorkspaceDto("group-4", "group", 4, "available", 243, 265));
+        list.add(workspaceDto("group-1", "group", 4, 12, 265));
+        list.add(workspaceDto("group-2", "group", 4, 89, 265));
+        list.add(workspaceDto("group-3", "group", 6, 166, 265));
+        list.add(workspaceDto("group-4", "group", 4, 243, 265));
         return list;
+    }
+
+    private WorkspaceDto workspaceDto(String id, String type, int capacity, int x, int y) {
+        return new WorkspaceDto(id, type, capacity, "available", x, y, workspaceQrRegistry.qrFor(id));
     }
 
     public List<WorkspaceDto> getWorkspaces(String date, String slotId, String type) {
@@ -92,7 +103,8 @@ public class ReservationService {
         return all.stream().map(ws -> {
             boolean occupied = reservationRepository.existsByWorkspaceIdAndDateAndSlotIdAndStatusIn(
                     ws.id(), date, slotId, List.of("ACTIVE", "PENDING", "COMPLETED"));
-            return new WorkspaceDto(ws.id(), ws.type(), ws.capacity(), occupied ? "occupied" : "available", ws.x(), ws.y());
+            return new WorkspaceDto(
+                    ws.id(), ws.type(), ws.capacity(), occupied ? "occupied" : "available", ws.x(), ws.y(), ws.qrCode());
         }).collect(Collectors.toList());
     }
 
@@ -160,7 +172,7 @@ public class ReservationService {
         record.setSlotLabel(label);
         record.setStatus("ACTIVE"); // Auto active for now
         record.setCourseCode(request.courseCode());
-        record.setQrPayload("QR_" + System.currentTimeMillis());
+        record.setQrPayload(workspaceQrRegistry.qrFor(request.workspaceId()));
 
         try {
             if (request.participantNicknames() != null && !request.participantNicknames().isEmpty()) {
@@ -173,7 +185,7 @@ public class ReservationService {
         }
 
         ReservationRecord saved = reservationRepository.save(record);
-        return ReservationMapper.toDetail(saved, objectMapper);
+        return ReservationMapper.toDetail(saved, objectMapper, workspaceQrRegistry.qrFor(saved.getWorkspaceId()));
     }
 
     public List<ReservationDetailDto> myReservations() {
@@ -186,7 +198,9 @@ public class ReservationService {
         UserAccount currentUser = (UserAccount) principal;
         List<ReservationRecord> records = reservationRepository
                 .findByUser_IdOrderByDateDescSlotIdAsc(currentUser.getId());
-        return records.stream().map(r -> ReservationMapper.toDetail(r, objectMapper)).collect(Collectors.toList());
+        return records.stream()
+                .map(r -> ReservationMapper.toDetail(r, objectMapper, workspaceQrRegistry.qrFor(r.getWorkspaceId())))
+                .collect(Collectors.toList());
     }
 
     public ActionResultDto cancelReservation(String reservationId) {

@@ -31,11 +31,13 @@ public final class ReservationMapper {
                 r.getStatus());
     }
 
-    public static ReservationDetailDto toDetail(ReservationRecord r, ObjectMapper objectMapper) {
+    public static ReservationDetailDto toDetail(
+            ReservationRecord r, ObjectMapper objectMapper, String qrPayload) {
         if (r == null) {
             return null;
         }
         List<String> participants = parseParticipants(r.getParticipantsJson(), objectMapper);
+        String qr = qrPayload != null ? qrPayload : "";
         return new ReservationDetailDto(
                 String.valueOf(r.getId()),
                 r.getWorkspaceId(),
@@ -44,7 +46,8 @@ public final class ReservationMapper {
                 r.getSlotLabel() != null ? r.getSlotLabel() : r.getSlotId(),
                 r.getStatus(),
                 r.getCourseCode() != null ? r.getCourseCode() : "",
-                participants);
+                participants,
+                qr);
     }
 
     private static List<String> parseParticipants(String json, ObjectMapper objectMapper) {

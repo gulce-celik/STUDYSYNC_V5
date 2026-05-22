@@ -6,6 +6,7 @@ import '../../../core/planner/ai_study_controller.dart';
 import '../../../core/session/auth_session.dart';
 import '../../../core/trust/responsibility_ledger.dart';
 import '../../../core/network/dashboard_api.dart';
+import '../../../shared/check_in/check_in_window.dart';
 import '../../../shared/check_in/reservation_check_in_sheet.dart';
 import '../../../shared/navigation/app_tab_controller.dart';
 import '../../courses/presentation/course_rating_screen.dart';
@@ -81,6 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
               workspaceId: ws,
               date: m['date']?.toString() ?? '',
               timeSlot: m['slotLabel']?.toString() ?? '',
+              slotId: m['slotId']?.toString() ?? '',
               type: isGroup ? ReservationKind.group : ReservationKind.individual,
             );
           }).toList();
@@ -129,6 +131,14 @@ class _HomeScreenState extends State<HomeScreen> {
       if (status != 'ACTIVE' && status != 'PENDING') {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('This reservation is already $status.')),
+        );
+        return;
+      }
+
+      if (!CheckInWindow.canCheckInNow(detail)) {
+        final hint = CheckInWindow.availabilityHint(detail);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(hint ?? 'Check-in is not available right now.')),
         );
         return;
       }
@@ -561,28 +571,62 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       ],
                                     )
-                                  else
-                                    InkWell(
-                                      borderRadius: BorderRadius.circular(8),
-                                      onTap: () => _openCheckInFromHome(r),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.qr_code_scanner_rounded, size: 14, color: Color(0xFF2563EB)),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              'QR Check In →',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                                color: Colors.blue.shade700,
-                                              ),
+                                  else ...[
+                                    Builder(
+                                      builder: (context) {
+                                        final canCheckIn = CheckInWindow.canCheckInNowForSlot(
+                                          date: r.date,
+                                          slotId: r.slotId,
+                                          slotLabel: r.timeSlot,
+                                        );
+                                        final hint = CheckInWindow.availabilityHintForSlot(
+                                          date: r.date,
+                                          slotId: r.slotId,
+                                          slotLabel: r.timeSlot,
+                                        );
+                                        return InkWell(
+                                          borderRadius: BorderRadius.circular(8),
+                                          onTap: canCheckIn ? () => _openCheckInFromHome(r) : null,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.qr_code_scanner_rounded,
+                                                      size: 14,
+                                                      color: canCheckIn
+                                                          ? const Color(0xFF2563EB)
+                                                          : const Color(0xFF9CA3AF),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'QR Check In →',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: canCheckIn
+                                                            ? Colors.blue.shade700
+                                                            : const Color(0xFF9CA3AF),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                if (hint != null)
+                                                  Text(
+                                                    hint,
+                                                    style: const TextStyle(fontSize: 9, color: Color(0xFF9CA3AF)),
+                                                  ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
-                                      ),
+                                          ),
+                                        );
+                                      },
                                     ),
+                                  ],
                                 ],
                               ),
                             ],
