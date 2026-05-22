@@ -31,4 +31,6 @@ public interface ReservationRecordRepository extends JpaRepository<ReservationRe
     List<ReservationRecord> findByUser_IdAndStatusInOrderByIdAsc(Long userId, Collection<String> statuses);
 
     List<ReservationRecord> findByDateAndStatusIn(String date, Collection<String> statuses);
+
+    List<ReservationRecord> findByDateLessThanEqualAndStatusIn(String date, Collection<String> statuses);
 }
