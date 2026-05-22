@@ -52,13 +52,14 @@ public class CheckInService {
             return new CheckInResultDto(false, "Reservation is not active or pending.");
         }
 
-        if (!qrCheckInPolicy.isWithinCheckInWindow(reservation)) {
-            return new CheckInResultDto(false,
-                    "Check-in is only available from 15 minutes before until 15 minutes after your slot start time.");
+        String windowReason = qrCheckInPolicy.checkInRejectionReason(reservation);
+        if (windowReason != null) {
+            return new CheckInResultDto(false, windowReason);
         }
 
-        if (!qrCheckInPolicy.payloadMatchesReservation(reservation, request.qrPayload())) {
-            return new CheckInResultDto(false, "Invalid QR code for this desk.");
+        String qrReason = qrCheckInPolicy.qrMismatchReason(reservation, request.qrPayload());
+        if (qrReason != null) {
+            return new CheckInResultDto(false, qrReason);
         }
 
         reservation.setStatus("COMPLETED");
