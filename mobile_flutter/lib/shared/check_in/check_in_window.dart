@@ -67,6 +67,33 @@ class CheckInWindow {
   }
 
   /// True when today is the reservation day (matches backend date rule).
+  /// True when [dateIso] is not today, or today's slot start is still in the future.
+  static bool isSlotBookableForDate({
+    required String dateIso,
+    required String slotId,
+    required String slotLabel,
+  }) {
+    final day = reservationDay(dateIso);
+    if (day == null) return false;
+    final now = DateTime.now();
+    final isToday = day.year == now.year && day.month == now.month && day.day == now.day;
+    if (!isToday) return day.isAfter(DateTime(now.year, now.month, now.day));
+    final start = slotStartLocal(
+      ReservationDetail(
+        id: '',
+        workspaceId: '',
+        date: dateIso,
+        slotId: slotId,
+        slotLabel: slotLabel,
+        status: 'ACTIVE',
+        courseCode: '',
+        participants: const [],
+      ),
+    );
+    if (start == null) return false;
+    return now.isBefore(start);
+  }
+
   static bool isReservationToday(ReservationDetail r) {
     final day = reservationDay(r.date);
     if (day == null) return false;
