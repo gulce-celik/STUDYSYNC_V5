@@ -6,4 +6,7 @@ import java.util.List;
 
 /** {@code GET /dashboard/home} — ana ekran kartları. */
 public record HomeDashboardResponseDto(
-        int responsibilityScore, List<ReservationSummaryDto> upcomingReservations, QuickStatsDto quickStats) {}
+        int responsibilityScore,
+        List<ReservationSummaryDto> upcomingReservations,
+        QuickStatsDto quickStats,
+        List<ScoreHistoryEntryDto> scoreHistory) {}
