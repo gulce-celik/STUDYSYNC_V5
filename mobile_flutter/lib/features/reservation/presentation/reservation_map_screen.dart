@@ -9,6 +9,7 @@ import '../../../core/trust/responsibility_ledger.dart';
 import '../../../shared/widgets/lost_map_badge.dart';
 import '../../lost_found/data/lost_found_api.dart';
 import '../../lost_found/lost_found_map_sync.dart';
+import '../../../shared/check_in/check_in_window.dart';
 import '../data/reservation_api.dart';
 import '../data/reservation_mock_data.dart';
 import '../domain/reservation_models.dart';
@@ -86,6 +87,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
     setState(() {
       _simulatedDay = dayIndex;
       _selectedDate = now.add(Duration(days: diff));
+      _prunePastSelectedSlot();
     });
     _reloadWorkspacesFromServer();
   }
@@ -191,6 +193,29 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
       if (s.label == _selectedSlot) return s.id;
     }
     return null;
+  }
+
+  List<TimeSlot> get _selectableTimeSlots => ReservationMockData.timeSlots
+      .where(
+        (s) => CheckInWindow.isSlotBookableForDate(
+          dateIso: _selectedDateIso,
+          slotId: s.id,
+          slotLabel: s.label,
+        ),
+      )
+      .toList();
+
+  void _prunePastSelectedSlot() {
+    final sid = _selectedSlotId;
+    if (sid == null || _selectedSlot.isEmpty) return;
+    if (CheckInWindow.isSlotBookableForDate(
+      dateIso: _selectedDateIso,
+      slotId: sid,
+      slotLabel: _selectedSlot,
+    )) {
+      return;
+    }
+    _selectedSlot = '';
   }
 
   Future<void> _reloadWorkspacesFromServer() async {
@@ -384,6 +409,18 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
     final slotId = _selectedSlotId;
     if (slotId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a valid slot')));
+      return;
+    }
+    if (!CheckInWindow.isSlotBookableForDate(
+      dateIso: _selectedDateIso,
+      slotId: slotId,
+      slotLabel: _selectedSlot,
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This time slot has already started. Choose a later slot today or another day.'),
+        ),
+      );
       return;
     }
 
@@ -991,10 +1028,17 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
                       onTap: _instantLocked
                           ? null
                           : () async {
+                              final now = DateTime.now();
+                              final todayStart = DateTime(now.year, now.month, now.day);
+                              final selectedStart = DateTime(
+                                _selectedDate.year,
+                                _selectedDate.month,
+                                _selectedDate.day,
+                              );
                               final d = await showDatePicker(
                                 context: context,
-                                initialDate: _selectedDate,
-                                firstDate: DateTime(2026, 1, 1),
+                                initialDate: selectedStart.isBefore(todayStart) ? todayStart : _selectedDate,
+                                firstDate: todayStart,
                                 lastDate: DateTime(2027, 12, 31),
                               );
                               if (d != null) {
@@ -1002,6 +1046,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
                                   _selectedDate = d;
                                   // Antigravity Modification: Sync the Top Day Menu label when a calendar date is picked.
                                   _simulatedDay = _dartWeekdayToSun0(d.weekday);
+                                  _prunePastSelectedSlot();
                                 });
                                 _reloadWorkspacesFromServer();
                               }
@@ -1038,7 +1083,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
                       initialValue: _selectedSlot.isEmpty ? null : _selectedSlot,
                       isExpanded: true,
                       hint: const Text('Select time slot', style: TextStyle(fontSize: 12)),
-                      items: ReservationMockData.timeSlots
+                      items: _selectableTimeSlots
                           .map(
                             (s) => DropdownMenuItem(
                               value: s.label,

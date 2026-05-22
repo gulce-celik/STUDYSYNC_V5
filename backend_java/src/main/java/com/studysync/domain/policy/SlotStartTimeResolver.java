@@ -1,6 +1,7 @@
 package com.studysync.domain.policy;
 
 import com.studysync.domain.entity.ReservationRecord;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Map;
 
@@ -19,15 +20,37 @@ public final class SlotStartTimeResolver {
 
     private SlotStartTimeResolver() {}
 
+    public static LocalTime resolveBySlotId(String slotId) {
+        if (slotId == null) {
+            return null;
+        }
+        return SLOT_START_BY_ID.get(slotId);
+    }
+
+    /**
+     * Same-day bookings require a slot start strictly after {@code now}; future/past dates skip time check.
+     */
+    public static boolean isBookableOnDate(String slotId, LocalDate reservationDate, LocalDate today, LocalTime now) {
+        if (reservationDate == null || today == null || now == null) {
+            return false;
+        }
+        if (reservationDate.isBefore(today)) {
+            return false;
+        }
+        if (reservationDate.isAfter(today)) {
+            return true;
+        }
+        LocalTime start = resolveBySlotId(slotId);
+        return start != null && start.isAfter(now);
+    }
+
     public static LocalTime resolve(ReservationRecord reservation) {
         if (reservation == null) {
             return null;
         }
-        if (reservation.getSlotId() != null) {
-            LocalTime byId = SLOT_START_BY_ID.get(reservation.getSlotId());
-            if (byId != null) {
-                return byId;
-            }
+        LocalTime byId = resolveBySlotId(reservation.getSlotId());
+        if (byId != null) {
+            return byId;
         }
         return parseFromSlotLabel(reservation.getSlotLabel());
     }

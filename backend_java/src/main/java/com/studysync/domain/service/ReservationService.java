@@ -136,10 +136,20 @@ public class ReservationService {
         UserAccount user = (UserAccount) principal;
         Long defaultUserId = user.getId();
 
-        // 2. Validation: Advance Booking Window (Mon/Fri Rule)
-        java.time.LocalDate today = java.time.LocalDate.now();
-        java.time.LocalDate targetDate = java.time.LocalDate.parse(request.date());
+        // 2. Validation: date and same-day slot must be in the future (campus clock)
+        LocalDate today = LocalDate.now(clock);
+        LocalTime now = LocalTime.now(clock);
+        LocalDate targetDate = LocalDate.parse(request.date());
 
+        if (targetDate.isBefore(today)) {
+            throw new IllegalStateException("Cannot book a date in the past.");
+        }
+        if (!SlotStartTimeResolver.isBookableOnDate(request.slotId(), targetDate, today, now)) {
+            throw new IllegalStateException(
+                    "This time slot has already started. Choose a later slot today or another day.");
+        }
+
+        // 3. Validation: Advance Booking Window (Mon/Fri Rule)
         if (targetDate.isAfter(today)) {
             java.time.DayOfWeek todayDay = today.getDayOfWeek();
             boolean isMonday = todayDay == java.time.DayOfWeek.MONDAY;
@@ -150,7 +160,7 @@ public class ReservationService {
             }
         }
 
-        // 3. Validation: Quota validation (Dynamic limit based on score)
+        // 4. Validation: Quota validation (Dynamic limit based on score)
         int dailyLimit = user.getResponsibilityScore() < 75 ? 2 : 3;
         int dailyReservations = reservationRepository.countByUser_IdAndDateAndStatusIn(
                 defaultUserId, request.date(), List.of("ACTIVE", "PENDING", "COMPLETED"));
