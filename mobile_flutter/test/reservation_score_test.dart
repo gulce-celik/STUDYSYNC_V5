@@ -55,6 +55,23 @@ void main() {
     expect(r.showsHistoryScoreBadge, isTrue);
   });
 
+  test('completed with legacy score 0 infers +5 for history', () {
+    const r = ReservationDetail(
+      id: '1',
+      workspaceId: 'desk-5',
+      date: '2026-05-22',
+      slotId: 'slot-3',
+      slotLabel: '11.00-13.00',
+      status: 'COMPLETED',
+      courseCode: 'CSE344',
+      participants: [],
+      score: 0,
+    );
+    expect(r.effectiveScore, 5);
+    expect(r.showsHistoryScoreBadge, isTrue);
+    expect(r.historyScoreLabel, '+5');
+  });
+
   test('cancelled mid-window shows zero badge from score', () {
     const r = ReservationDetail(
       id: '1',

@@ -128,3 +128,4 @@ cd mobile_flutter && flutter test test/reservation_score_test.dart
 | 2026-05-22 | Backend cancel: auto `cancelledAt` / `slotStartAt` when body empty |
 | 2026-05-22 | My Bookings History: display `r.score` only |
 | 2026-05-22 | Profile score history: `ProfileScoreEntry.score` from `r.score` |
+| 2026-05-22 | Fix History “no score change”: `toDetail` uses `resolveScore`; Flutter `effectiveScore` |

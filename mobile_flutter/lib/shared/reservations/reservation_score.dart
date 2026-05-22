@@ -28,10 +28,20 @@ abstract final class ReservationScore {
     return int.tryParse(raw.toString());
   }
 
-  /// History / terminal UI — persisted API [ReservationDetail.score] only.
+  /// History / terminal UI — persisted API [ReservationDetail.score] with legacy terminal inference.
   static bool shouldShowHistoryBadge(ReservationDetail r) {
     if (!isTerminalStatus(r.status)) return false;
-    return r.score != 0 || normalizeStatus(r.status) == 'CANCELLED';
+    final delta = _effectiveDelta(r);
+    return delta != 0 || normalizeStatus(r.status) == 'CANCELLED';
+  }
+
+  static int _effectiveDelta(ReservationDetail r) {
+    if (r.score != 0) return r.score;
+    return switch (normalizeStatus(r.status)) {
+      'COMPLETED' => 5,
+      'NO_SHOW' => -10,
+      _ => 0,
+    };
   }
 
   static String descriptionFor(ReservationDetail r, int delta) {
