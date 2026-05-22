@@ -41,4 +41,19 @@ public class LostFoundService {
         lostItemRepository.save(record);
         return new ActionResultDto(true, "Item reported successfully at " + workspaceId, null, null);
     }
+
+    public ActionResultDto markAsFound(String id) {
+        Long recordId;
+        try {
+            recordId = Long.parseLong(id);
+        } catch (NumberFormatException e) {
+            return new ActionResultDto(false, "Invalid ID format", null, null);
+        }
+
+        return lostItemRepository.findById(recordId).map(record -> {
+            record.setStatus("FOUND");
+            lostItemRepository.save(record);
+            return new ActionResultDto(true, "Item marked as found", null, null);
+        }).orElseGet(() -> new ActionResultDto(false, "Item not found", null, null));
+    }
 }

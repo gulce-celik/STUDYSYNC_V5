@@ -38,4 +38,9 @@ public class LostFoundController {
     public ActionResultDto reportLostItem(@Valid @RequestBody LostFoundReportRequestDto body) {
         return lostFoundService.reportLostItem(body.workspaceId(), body.description());
     }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}/found")
+    public ActionResultDto markAsFound(@org.springframework.web.bind.annotation.PathVariable String id) {
+        return lostFoundService.markAsFound(id);
+    }
 }
