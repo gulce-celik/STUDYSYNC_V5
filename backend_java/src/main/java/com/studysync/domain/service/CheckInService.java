@@ -6,6 +6,7 @@ import com.studysync.domain.dto.CheckInResultDto;
 import com.studysync.domain.dto.CheckInVerifyRequestDto;
 import com.studysync.domain.entity.ReservationRecord;
 import com.studysync.domain.policy.QrCheckInPolicy;
+import com.studysync.domain.policy.ReservationScoringPolicy;
 import com.studysync.domain.repository.ReservationRecordRepository;
 import org.springframework.stereotype.Service;
 
@@ -22,14 +23,17 @@ public class CheckInService {
     private final ReservationRecordRepository reservationRepository;
     private final QrCheckInPolicy qrCheckInPolicy;
     private final ResponsibilityScoreService responsibilityScoreService;
+    private final ReservationScoringPolicy reservationScoringPolicy;
 
     public CheckInService(
             ReservationRecordRepository reservationRepository,
             QrCheckInPolicy qrCheckInPolicy,
-            ResponsibilityScoreService responsibilityScoreService) {
+            ResponsibilityScoreService responsibilityScoreService,
+            ReservationScoringPolicy reservationScoringPolicy) {
         this.reservationRepository = reservationRepository;
         this.qrCheckInPolicy = qrCheckInPolicy;
         this.responsibilityScoreService = responsibilityScoreService;
+        this.reservationScoringPolicy = reservationScoringPolicy;
     }
 
     @org.springframework.transaction.annotation.Transactional
@@ -62,9 +66,9 @@ public class CheckInService {
             return new CheckInResultDto(false, qrReason);
         }
 
-        final int scoreDelta = 5;
+        final int scoreDelta = reservationScoringPolicy.checkInScore();
         reservation.setStatus("COMPLETED");
-        reservation.setScoreChange(scoreDelta);
+        reservation.setScore(scoreDelta);
         reservationRepository.saveAndFlush(reservation);
 
         responsibilityScoreService.applyDelta(reservation.getUser().getId(), scoreDelta);

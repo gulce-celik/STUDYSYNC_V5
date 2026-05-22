@@ -48,18 +48,20 @@ public final class ReservationMapper {
                 r.getCourseCode() != null ? r.getCourseCode() : "",
                 participants,
                 qr,
-                resolveScoreChange(r));
+                r.getScore());
     }
 
-    /** Persisted value, with legacy fallback when older rows have no column set. */
-    public static Integer resolveScoreChange(ReservationRecord r) {
-        if (r.getScoreChange() != null) {
-            return r.getScoreChange();
+    /**
+     * Effective score delta for terminal reservations; legacy rows may have {@code 0} with terminal status.
+     */
+    public static int resolveScore(ReservationRecord r) {
+        if (r.getScore() != 0) {
+            return r.getScore();
         }
         return switch (r.getStatus() != null ? r.getStatus().toUpperCase().trim() : "") {
             case "COMPLETED" -> 5;
             case "NO_SHOW" -> -10;
-            default -> null;
+            default -> 0;
         };
     }
 

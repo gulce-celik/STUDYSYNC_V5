@@ -11,6 +11,8 @@ import com.studysync.domain.entity.ReservationRecord;
 import com.studysync.domain.entity.UserAccount;
 import com.studysync.domain.mapper.ReservationMapper;
 import com.studysync.domain.policy.CancellationScoringPolicy;
+import com.studysync.domain.policy.ReservationScoringPolicy;
+import com.studysync.domain.policy.SlotStartTimeResolver;
 import com.studysync.domain.repository.ReservationRecordRepository;
 import com.studysync.domain.repository.UserAccountRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,7 +20,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysync.domain.dto.CancelReservationRequestDto;
 import com.studysync.domain.exception.AccessDeniedException;
 import com.studysync.domain.exception.ResourceNotFoundException;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -62,21 +67,27 @@ import org.springframework.stereotype.Service;
 public class ReservationService {
 
     private final CancellationScoringPolicy cancellationScoringPolicy;
+    private final ReservationScoringPolicy reservationScoringPolicy;
     private final ReservationRecordRepository reservationRepository;
     private final ResponsibilityScoreService responsibilityScoreService;
     private final ObjectMapper objectMapper;
     private final WorkspaceQrRegistry workspaceQrRegistry;
+    private final Clock clock;
 
     public ReservationService(CancellationScoringPolicy cancellationScoringPolicy,
+            ReservationScoringPolicy reservationScoringPolicy,
             ReservationRecordRepository reservationRepository,
             ResponsibilityScoreService responsibilityScoreService,
             ObjectMapper objectMapper,
-            WorkspaceQrRegistry workspaceQrRegistry) {
+            WorkspaceQrRegistry workspaceQrRegistry,
+            Clock clock) {
         this.cancellationScoringPolicy = cancellationScoringPolicy;
+        this.reservationScoringPolicy = reservationScoringPolicy;
         this.reservationRepository = reservationRepository;
         this.responsibilityScoreService = responsibilityScoreService;
         this.objectMapper = objectMapper;
         this.workspaceQrRegistry = workspaceQrRegistry;
+        this.clock = clock;
     }
 
     private List<WorkspaceDto> generateWorkspaces() {
@@ -171,6 +182,7 @@ public class ReservationService {
         };
         record.setSlotLabel(label);
         record.setStatus("ACTIVE"); // Auto active for now
+        record.setScore(reservationScoringPolicy.initialScore());
         record.setCourseCode(request.courseCode());
         record.setQrPayload(workspaceQrRegistry.qrFor(request.workspaceId()));
 
@@ -225,12 +237,18 @@ public class ReservationService {
             return new ActionResultDto(false, "Reservation is already cancelled.", 0, null);
         }
 
-        // Apply policy
-        ActionResultDto result = cancellationScoringPolicy.evaluate(reservationId, cancelledAt, slotStartAt);
+        // Backend source of truth: default to campus clock + reservation slot when client omits times.
+        final LocalDateTime effectiveCancelledAt =
+                cancelledAt != null ? cancelledAt : LocalDateTime.now(clock);
+        final LocalDateTime effectiveSlotStart =
+                slotStartAt != null ? slotStartAt : slotStartFromRecord(record);
+        ActionResultDto result = cancellationScoringPolicy.evaluate(
+                reservationId, effectiveCancelledAt, effectiveSlotStart);
 
         // Update state
         record.setStatus("CANCELLED");
-        record.setScoreChange(result.scoreChange());
+        final int cancelScore = result.scoreChange() != null ? result.scoreChange() : 0;
+        record.setScore(cancelScore);
         reservationRepository.saveAndFlush(record);
 
         // Antigravity Modification: Enforce history limit (max 10 completed/cancelled
@@ -260,5 +278,17 @@ public class ReservationService {
         }
 
         return result;
+    }
+
+    private static LocalDateTime slotStartFromRecord(ReservationRecord record) {
+        LocalTime start = SlotStartTimeResolver.resolve(record);
+        if (start == null || record.getDate() == null || record.getDate().isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(record.getDate()).atTime(start);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

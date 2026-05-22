@@ -80,13 +80,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final entries = <ProfileScoreEntry>[];
       for (final ReservationDetail r in list) {
-        final delta = r.scoreEffect;
-        if (delta == null) continue;
+        if (!r.showsHistoryScoreBadge) continue;
         entries.add(
           ProfileScoreEntry(
             id: r.id,
             date: r.date,
-            scoreChange: delta,
+            score: r.score,
             description: r.scoreEffectDescription,
           ),
         );
@@ -578,8 +577,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: ListView(
                             shrinkWrap: true,
                             children: _scoreHistory.map((e) {
-                              final pos = e.scoreChange > 0;
-                              final zero = e.scoreChange == 0;
+                              final pos = e.score > 0;
+                              final zero = e.score == 0;
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.all(10),
@@ -615,7 +614,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                     ),
                                     Text(
-                                      ReservationScore.formatDelta(e.scoreChange),
+                                      ReservationScore.formatDelta(e.score),
                                       style: TextStyle(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 12,

@@ -56,10 +56,7 @@ public class DashboardService {
             if (!ReservationMapper.isTerminalStatus(r.getStatus())) {
                 continue;
             }
-            Integer delta = ReservationMapper.resolveScoreChange(r);
-            if (delta == null) {
-                continue;
-            }
+            int delta = ReservationMapper.resolveScore(r);
             out.add(new ScoreHistoryEntryDto(
                     String.valueOf(r.getId()),
                     r.getDate(),

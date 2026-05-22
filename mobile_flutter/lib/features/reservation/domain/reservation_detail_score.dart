@@ -1,21 +1,17 @@
 import 'reservation_models.dart';
 import '../../../shared/reservations/reservation_score.dart';
 
-/// Score delta on a reservation for History / Profile (uses API [ReservationDetail.scoreChange] + policy fallback).
+/// Score on a reservation — [ReservationDetail.score] from API (backend source of truth).
 extension ReservationDetailScore on ReservationDetail {
-  int? get scoreEffect => ReservationScore.resolve(this);
+  bool get isTerminalReservation => ReservationScore.isTerminalStatus(status);
 
-  bool get hasScoreEffect => scoreEffect != null;
+  /// My Bookings → History: show persisted [score] for terminal rows.
+  bool get showsHistoryScoreBadge =>
+      isTerminalReservation &&
+      (score != 0 || status.toUpperCase() == 'CANCELLED');
 
-  String get scoreEffectLabel {
-    final delta = scoreEffect;
-    if (delta == null) return '';
-    return ReservationScore.formatDelta(delta);
-  }
+  String get historyScoreLabel => ReservationScore.formatDelta(score);
 
-  String get scoreEffectDescription {
-    final delta = scoreEffect;
-    if (delta == null) return '';
-    return ReservationScore.descriptionFor(this, delta);
-  }
+  String get scoreEffectDescription =>
+      ReservationScore.descriptionFor(this, score);
 }

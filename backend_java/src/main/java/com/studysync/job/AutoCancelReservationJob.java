@@ -2,6 +2,7 @@ package com.studysync.job;
 
 import com.studysync.domain.entity.ReservationRecord;
 import com.studysync.domain.policy.QrCheckInPolicy;
+import com.studysync.domain.policy.ReservationScoringPolicy;
 import com.studysync.domain.policy.SlotStartTimeResolver;
 import com.studysync.domain.repository.ReservationRecordRepository;
 import com.studysync.domain.service.ResponsibilityScoreService;
@@ -18,26 +19,26 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Marks unchecked reservations as {@code NO_SHOW} when the QR check-in window closes
  * ({@link QrCheckInPolicy#GRACE_AFTER_START_MINUTES} after slot start) and applies the
- * responsibility score penalty ({@value #NO_SHOW_SCORE_DELTA}).
+ * responsibility score penalty ({@link ReservationScoringPolicy#NO_SHOW_SCORE}).
  */
 @Component
 public class AutoCancelReservationJob {
 
     private static final Logger logger = LoggerFactory.getLogger(AutoCancelReservationJob.class);
 
-    /** Per {@code docs/api-contract-v1.md} and {@code docs/decision-cancellation-scoring.md}. */
-    static final int NO_SHOW_SCORE_DELTA = -10;
-
     private final ReservationRecordRepository reservationRepository;
     private final ResponsibilityScoreService responsibilityScoreService;
+    private final ReservationScoringPolicy reservationScoringPolicy;
     private final Clock clock;
 
     public AutoCancelReservationJob(
             ReservationRecordRepository reservationRepository,
             ResponsibilityScoreService responsibilityScoreService,
+            ReservationScoringPolicy reservationScoringPolicy,
             Clock clock) {
         this.reservationRepository = reservationRepository;
         this.responsibilityScoreService = responsibilityScoreService;
+        this.reservationScoringPolicy = reservationScoringPolicy;
         this.clock = clock;
     }
 
@@ -73,12 +74,13 @@ public class AutoCancelReservationJob {
             return;
         }
 
+        final int noShowScore = reservationScoringPolicy.noShowScore();
         record.setStatus("NO_SHOW");
-        record.setScoreChange(NO_SHOW_SCORE_DELTA);
+        record.setScore(noShowScore);
         reservationRepository.saveAndFlush(record);
 
         Long userId = record.getUser().getId();
-        responsibilityScoreService.applyDelta(userId, NO_SHOW_SCORE_DELTA);
+        responsibilityScoreService.applyDelta(userId, noShowScore);
 
         logger.info(
                 "Reservation {} marked NO_SHOW (slot start {}, deadline {}). User {} score {}.",
@@ -86,6 +88,6 @@ public class AutoCancelReservationJob {
                 startTime,
                 deadline,
                 userId,
-                NO_SHOW_SCORE_DELTA);
+                noShowScore);
     }
 }

@@ -49,7 +49,7 @@ class BookingsMockData {
           courseCode: 'CSE331',
           participants: [],
           checkedIn: true,
-          scoreChange: 5,
+          score: 5,
         ),
         const ReservationDetail(
           id: 'res-past-2',
@@ -61,7 +61,7 @@ class BookingsMockData {
           courseCode: 'MATH281',
           participants: [],
           checkedIn: true,
-          scoreChange: 5,
+          score: 5,
         ),
         const ReservationDetail(
           id: 'res-past-3',
@@ -73,7 +73,7 @@ class BookingsMockData {
           courseCode: 'CSE354',
           participants: ['user-1', 'user-2'],
           checkedIn: false,
-          scoreChange: -10,
+          score: -10,
         ),
         const ReservationDetail(
           id: 'res-past-4',
@@ -85,7 +85,7 @@ class BookingsMockData {
           courseCode: 'CSE211',
           participants: [],
           checkedIn: false,
-          scoreChange: -5,
+          score: -5,
         ),
       ];
 }

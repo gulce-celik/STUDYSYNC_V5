@@ -324,11 +324,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                         _miniIcon(Icons.groups_2_outlined, 'Group (${r.participants.length})'),
                                     ],
                                   ),
-                                  if (r.hasScoreEffect) ...[
+                                  if (_tab == _BookingsTab.history && r.showsHistoryScoreBadge) ...[
                                     const SizedBox(height: 8),
                                     Builder(
                                       builder: (context) {
-                                        final delta = r.scoreEffect!;
+                                        final delta = r.score;
                                         final positive = delta > 0;
                                         final negative = delta < 0;
                                         return Container(

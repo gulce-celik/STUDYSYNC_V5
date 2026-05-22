@@ -42,7 +42,7 @@ class ReservationDetail {
     required this.participants,
     this.checkedIn = false,
     this.qrPayload,
-    this.scoreChange,
+    this.score = 0,
   });
 
   final String id;
@@ -55,8 +55,8 @@ class ReservationDetail {
   final List<String> participants;
   final bool checkedIn;
   final String? qrPayload;
-  /// Responsibility score delta from backend when status is terminal (COMPLETED, CANCELLED, NO_SHOW).
-  final int? scoreChange;
+  /// Responsibility score delta on this reservation — {@code 0} at creation; updated on terminal events.
+  final int score;
 
   bool get isGroup => participants.length > 1;
 
@@ -74,7 +74,7 @@ class ReservationDetail {
       participants: pList,
       checkedIn: json['checkedIn'] == true,
       qrPayload: json['qrPayload']?.toString(),
-      scoreChange: _parseScoreChange(json['scoreChange'] ?? json['score_change']),
+      score: _parseScore(json['score'] ?? json['scoreChange'] ?? json['score_change']),
     );
   }
 
@@ -84,10 +84,10 @@ class ReservationDetail {
     return s;
   }
 
-  static int? _parseScoreChange(dynamic raw) {
-    if (raw == null) return null;
+  static int _parseScore(dynamic raw) {
+    if (raw == null) return 0;
     if (raw is int) return raw;
     if (raw is num) return raw.toInt();
-    return int.tryParse(raw.toString());
+    return int.tryParse(raw.toString()) ?? 0;
   }
 }

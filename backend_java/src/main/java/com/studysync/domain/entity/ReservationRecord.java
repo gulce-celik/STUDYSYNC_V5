@@ -66,9 +66,12 @@ public class ReservationRecord {
     @Column(name = "qr_payload", length = 512)
     private String qrPayload;
 
-    /** Responsibility score delta applied when this reservation reached a terminal status. */
-    @Column(name = "score_change")
-    private Integer scoreChange;
+    /**
+     * Responsibility score delta for this reservation — {@code 0} at creation;
+     * updated on check-in, cancel, or no-show per {@code docs/decision-cancellation-scoring.md}.
+     */
+    @Column(name = "score_change", nullable = false)
+    private int score = 0;
 
     // Antigravity Modification: Changed constructor from protected to public to fix compilation visibility errors
     public ReservationRecord() {}
@@ -149,11 +152,11 @@ public class ReservationRecord {
         this.qrPayload = qrPayload;
     }
 
-    public Integer getScoreChange() {
-        return scoreChange;
+    public int getScore() {
+        return score;
     }
 
-    public void setScoreChange(Integer scoreChange) {
-        this.scoreChange = scoreChange;
+    public void setScore(int score) {
+        this.score = score;
     }
 }

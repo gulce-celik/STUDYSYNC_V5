@@ -119,7 +119,7 @@ Used by the mobile weekly grid so study-time suggestions can avoid marked slots.
 - `UserSummary`: `id`, `name`, `nickname`, `email`, `department`, `year`
 - `ReservationSummary`: `id`, `workspaceId`, `date`, `slotLabel`, `status`
 - `Workspace`: `id`, `type`, `capacity`, `status`, `x`, `y`, `qrCode` (`desk-N` → desk number `N`, e.g. `desk-12` → `12`; `group-N` → `GN`)
-- `ReservationDetail`: `id`, `workspaceId`, `date`, `slotId`, `slotLabel`, `status`, `courseCode`, `participants`, `qrPayload`, `scoreChange` (nullable; set when COMPLETED +5, NO_SHOW −10, CANCELLED per cancel policy)
+- `ReservationDetail`: `id`, `workspaceId`, `date`, `slotId`, `slotLabel`, `status`, `courseCode`, `participants`, `qrPayload`, `score` (`0` at creation; COMPLETED `+5`, NO_SHOW `−10`, CANCELLED per cancel policy)
 - `StudyBuddySuggestion`: `userId`, `name`, `matchScore`, `commonCourses`, `commonTopics`
 - `Course`: `code`, `name`, `difficultyRating`, `ratingCount`
 - `LostItem`: `id`, `workspaceId`, `description`, `reportedAt`

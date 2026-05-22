@@ -28,20 +28,11 @@ abstract final class ReservationScore {
     return int.tryParse(raw.toString());
   }
 
-  /// API `scoreChange` when present; otherwise same fallbacks as Java `ReservationMapper`.
-  static int? resolve(ReservationDetail r) {
-    if (r.scoreChange != null) return r.scoreChange;
-    switch (normalizeStatus(r.status)) {
-      case 'COMPLETED':
-        return 5;
-      case 'NO_SHOW':
-        return -10;
-      default:
-        return null;
-    }
+  /// History / terminal UI — persisted API [ReservationDetail.score] only.
+  static bool shouldShowHistoryBadge(ReservationDetail r) {
+    if (!isTerminalStatus(r.status)) return false;
+    return r.score != 0 || normalizeStatus(r.status) == 'CANCELLED';
   }
-
-  static bool shouldShowBadge(ReservationDetail r) => resolve(r) != null;
 
   static String descriptionFor(ReservationDetail r, int delta) {
     final slot = r.slotLabel.isNotEmpty ? r.slotLabel : r.slotId;
