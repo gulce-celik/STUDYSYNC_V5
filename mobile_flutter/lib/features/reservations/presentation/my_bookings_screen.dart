@@ -95,10 +95,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
-  int? _scoreImpact(ReservationDetail r) {
-    if (!_isHistoryTab(r)) return null;
-    return ReservationScore.resolve(r);
-  }
+  int? _scoreImpact(ReservationDetail r) => ReservationScore.resolve(r);
 
   String _scoreImpactLabel(int delta) {
     if (delta > 0) return 'Responsibility score +$delta';
@@ -175,6 +172,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         );
         await _syncResponsibilityFromDashboard();
         await _load();
+        if (mounted) setState(() {});
       },
     );
   }
@@ -328,7 +326,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                         _miniIcon(Icons.groups_2_outlined, 'Group (${r.participants.length})'),
                                     ],
                                   ),
-                                  if (_isHistoryTab(r) && _scoreImpact(r) != null) ...[
+                                  if (ReservationScore.shouldShowBadge(r)) ...[
                                     const SizedBox(height: 8),
                                     Builder(
                                       builder: (context) {

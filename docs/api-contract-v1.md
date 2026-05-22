@@ -30,6 +30,8 @@ default is `http://localhost:8080/api/v1` on iOS simulator / desktop; on **Andro
     - `responsibilityScore` (int)
     - `upcomingReservations` (ReservationSummary[])
     - `quickStats` (QuickStats)
+    - `scoreHistory` (ScoreHistoryEntry[]) — terminal reservations with `scoreChange` for Profile UI
+- `ScoreHistoryEntry`: `id`, `date`, `scoreChange`, `description`, `status`
 
 ## Reservation
 

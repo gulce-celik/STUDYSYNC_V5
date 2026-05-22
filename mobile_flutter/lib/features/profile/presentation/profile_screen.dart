@@ -45,6 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ThemeMode.light => _DarkModePref.off,
     };
     AppTabController.instance.addListener(_onProfileTabSelected);
+    ResponsibilityLedger.instance.addListener(_onResponsibilityScoreChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         AuthScope.of(context).refreshProfile();
@@ -56,7 +57,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     AppTabController.instance.removeListener(_onProfileTabSelected);
+    ResponsibilityLedger.instance.removeListener(_onResponsibilityScoreChanged);
     super.dispose();
+  }
+
+  void _onResponsibilityScoreChanged() {
+    if (mounted) _loadScoreHistory();
   }
 
   static const int _profileTabIndex = 4;
@@ -68,53 +74,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _refreshProfileData() async {
-    await Future.wait([
-      _loadScoreHistory(),
-      _syncResponsibilityScore(),
-    ]);
-  }
-
-  Future<void> _syncResponsibilityScore() async {
-    try {
-      final dashboard = await DashboardApi().getHome();
-      final scoreRaw = dashboard['responsibilityScore'];
-      if (scoreRaw is num && mounted) {
-        ResponsibilityLedger.instance.setHomeContext(mockOnly: scoreRaw.toInt());
-      }
-    } catch (_) {}
+    await _loadScoreHistory();
   }
 
   Future<void> _loadScoreHistory() async {
     setState(() => _scoreHistoryLoading = true);
     try {
-      final list = await ReservationApi().getMyReservations();
+      final dashboard = await DashboardApi().getHome();
       if (!mounted) return;
-      final entries = <ProfileScoreEntry>[];
-      for (final ReservationDetail r in list) {
-        if (!ReservationScore.isTerminalStatus(r.status)) continue;
-        final delta = ReservationScore.resolve(r);
-        if (delta == null) continue;
-        entries.add(
-          ProfileScoreEntry(
-            id: r.id,
-            date: r.date,
-            scoreChange: delta,
-            description: ReservationScore.descriptionFor(r, delta),
-          ),
-        );
+
+      final scoreRaw = dashboard['responsibilityScore'];
+      if (scoreRaw is num) {
+        ResponsibilityLedger.instance.setHomeContext(mockOnly: scoreRaw.toInt());
+      }
+
+      var entries = _scoreHistoryFromDashboard(dashboard['scoreHistory']);
+      if (entries.isEmpty) {
+        entries = await _scoreHistoryFromReservations();
       }
       entries.sort((a, b) => b.date.compareTo(a.date));
+
       setState(() {
         _scoreHistory = entries;
         _scoreHistoryLoading = false;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _scoreHistory = [];
-        _scoreHistoryLoading = false;
-      });
+      try {
+        final entries = await _scoreHistoryFromReservations();
+        setState(() {
+          _scoreHistory = entries;
+          _scoreHistoryLoading = false;
+        });
+      } catch (_) {
+        setState(() {
+          _scoreHistory = [];
+          _scoreHistoryLoading = false;
+        });
+      }
     }
+  }
+
+  List<ProfileScoreEntry> _scoreHistoryFromDashboard(dynamic raw) {
+    if (raw is! List) return [];
+    final entries = <ProfileScoreEntry>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final m = Map<String, dynamic>.from(item);
+      final delta = ReservationScore.parseDelta(m['scoreChange']);
+      if (delta == null) continue;
+      entries.add(
+        ProfileScoreEntry(
+          id: m['id']?.toString() ?? '',
+          date: m['date']?.toString() ?? '',
+          scoreChange: delta,
+          description: m['description']?.toString() ?? 'Reservation update',
+        ),
+      );
+    }
+    return entries;
+  }
+
+  Future<List<ProfileScoreEntry>> _scoreHistoryFromReservations() async {
+    final list = await ReservationApi().getMyReservations();
+    final entries = <ProfileScoreEntry>[];
+    for (final ReservationDetail r in list) {
+      if (!ReservationScore.isTerminalStatus(r.status)) continue;
+      final delta = ReservationScore.resolve(r);
+      if (delta == null) continue;
+      entries.add(
+        ProfileScoreEntry(
+          id: r.id,
+          date: r.date,
+          scoreChange: delta,
+          description: ReservationScore.descriptionFor(r, delta),
+        ),
+      );
+    }
+    return entries;
   }
 
   bool get _prefsComplete =>

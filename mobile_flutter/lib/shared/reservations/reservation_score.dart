@@ -4,8 +4,14 @@ import '../../features/reservation/domain/reservation_models.dart';
 abstract final class ReservationScore {
   ReservationScore._();
 
+  static String normalizeStatus(String status) {
+    final s = status.toUpperCase().trim();
+    if (s == 'CHECKED_IN' || s == 'CHECKEDIN') return 'COMPLETED';
+    return s;
+  }
+
   static bool isTerminalStatus(String status) {
-    switch (status.toUpperCase()) {
+    switch (normalizeStatus(status)) {
       case 'COMPLETED':
       case 'CANCELLED':
       case 'NO_SHOW':
@@ -15,10 +21,17 @@ abstract final class ReservationScore {
     }
   }
 
+  static int? parseDelta(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw.toString());
+  }
+
   /// API `scoreChange` when present; otherwise same fallbacks as Java `ReservationMapper`.
   static int? resolve(ReservationDetail r) {
     if (r.scoreChange != null) return r.scoreChange;
-    switch (r.status.toUpperCase()) {
+    switch (normalizeStatus(r.status)) {
       case 'COMPLETED':
         return 5;
       case 'NO_SHOW':
@@ -28,9 +41,11 @@ abstract final class ReservationScore {
     }
   }
 
+  static bool shouldShowBadge(ReservationDetail r) => resolve(r) != null;
+
   static String descriptionFor(ReservationDetail r, int delta) {
     final slot = r.slotLabel.isNotEmpty ? r.slotLabel : r.slotId;
-    switch (r.status.toUpperCase()) {
+    switch (normalizeStatus(r.status)) {
       case 'COMPLETED':
         return 'Check-in completed · ${r.workspaceId} · $slot';
       case 'NO_SHOW':

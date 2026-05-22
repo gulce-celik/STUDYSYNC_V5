@@ -69,13 +69,19 @@ class ReservationDetail {
       date: json['date']?.toString() ?? '',
       slotId: json['slotId']?.toString() ?? '',
       slotLabel: json['slotLabel']?.toString() ?? '',
-      status: (json['status']?.toString() ?? 'PENDING').toUpperCase(),
+      status: _normalizeStatus(json['status']),
       courseCode: json['courseCode']?.toString() ?? '',
       participants: pList,
       checkedIn: json['checkedIn'] == true,
       qrPayload: json['qrPayload']?.toString(),
-      scoreChange: _parseScoreChange(json['scoreChange']),
+      scoreChange: _parseScoreChange(json['scoreChange'] ?? json['score_change']),
     );
+  }
+
+  static String _normalizeStatus(dynamic raw) {
+    final s = (raw?.toString() ?? 'PENDING').toUpperCase().trim();
+    if (s == 'CHECKED_IN' || s == 'CHECKEDIN') return 'COMPLETED';
+    return s;
   }
 
   static int? _parseScoreChange(dynamic raw) {

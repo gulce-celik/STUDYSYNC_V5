@@ -52,14 +52,40 @@ public final class ReservationMapper {
     }
 
     /** Persisted value, with legacy fallback when older rows have no column set. */
-    private static Integer resolveScoreChange(ReservationRecord r) {
+    public static Integer resolveScoreChange(ReservationRecord r) {
         if (r.getScoreChange() != null) {
             return r.getScoreChange();
         }
-        return switch (r.getStatus() != null ? r.getStatus().toUpperCase() : "") {
+        return switch (r.getStatus() != null ? r.getStatus().toUpperCase().trim() : "") {
             case "COMPLETED" -> 5;
             case "NO_SHOW" -> -10;
             default -> null;
+        };
+    }
+
+    public static String scoreHistoryDescription(ReservationRecord r, int scoreChange) {
+        String slot = r.getSlotLabel() != null && !r.getSlotLabel().isBlank()
+                ? r.getSlotLabel()
+                : r.getSlotId();
+        return switch (r.getStatus() != null ? r.getStatus().toUpperCase().trim() : "") {
+            case "COMPLETED" -> "Check-in completed · " + r.getWorkspaceId() + " · " + slot;
+            case "NO_SHOW" -> "No-show · " + r.getCourseCode() + " · " + slot;
+            case "CANCELLED" -> scoreChange >= 3
+                    ? "Early cancellation · " + r.getCourseCode()
+                    : scoreChange <= -5
+                            ? "Late cancellation · " + r.getCourseCode()
+                            : "Cancellation · " + r.getCourseCode() + " · " + slot;
+            default -> r.getStatus() + " · " + r.getCourseCode();
+        };
+    }
+
+    public static boolean isTerminalStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+        return switch (status.toUpperCase().trim()) {
+            case "COMPLETED", "CANCELLED", "NO_SHOW" -> true;
+            default -> false;
         };
     }
 
