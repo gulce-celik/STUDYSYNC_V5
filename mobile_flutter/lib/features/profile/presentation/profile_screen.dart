@@ -2,8 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_scope.dart';
-import '../../../core/network/dashboard_api.dart';
 import '../../../core/planner/ai_study_controller.dart';
+import '../../../shared/reservations/reservation_score.dart';
 import '../../../core/session/auth_session.dart';
 import '../../../core/trust/responsibility_ledger.dart';
 import '../../../core/theme/theme_mode_controller.dart';
@@ -11,8 +11,8 @@ import '../../../shared/navigation/app_tab_controller.dart';
 import '../../auth/data/registration_mock_data.dart';
 import '../../auth/data/auth_api.dart';
 import '../../reservation/data/reservation_api.dart';
+import '../../reservation/domain/reservation_detail_score.dart';
 import '../../reservation/domain/reservation_models.dart';
-import '../../../shared/reservations/reservation_score.dart';
 import '../data/profile_mock_data.dart';
 import 'edit_enrolled_courses_sheet.dart';
 
@@ -33,7 +33,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   _DarkModePref _darkMode = _DarkModePref.off;
 
   List<ProfileScoreEntry> _scoreHistory = [];
-  bool _scoreHistoryLoading = true;
+  bool _scoreHistoryLoading = false;
+  bool _scoreHistoryLoaded = false;
+
+  static const int _profileTabIndex = 4;
 
   @override
   void initState() {
@@ -44,53 +47,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ThemeMode.dark => _DarkModePref.on,
       ThemeMode.light => _DarkModePref.off,
     };
-    AppTabController.instance.addListener(_onProfileTabSelected);
-    ResponsibilityLedger.instance.addListener(_onResponsibilityScoreChanged);
+    AppTabController.instance.addListener(_onProfileTabOpened);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        AuthScope.of(context).refreshProfile();
-        _refreshProfileData();
+      if (!mounted) return;
+      AuthScope.of(context).refreshProfile();
+      if (AppTabController.instance.currentIndex == _profileTabIndex) {
+        _loadScoreHistoryOnce();
       }
     });
   }
 
   @override
   void dispose() {
-    AppTabController.instance.removeListener(_onProfileTabSelected);
-    ResponsibilityLedger.instance.removeListener(_onResponsibilityScoreChanged);
+    AppTabController.instance.removeListener(_onProfileTabOpened);
     super.dispose();
   }
 
-  void _onResponsibilityScoreChanged() {
-    if (mounted) _loadScoreHistory();
+  /// Load score history only the first time the user opens the Profile tab.
+  void _onProfileTabOpened() {
+    if (AppTabController.instance.currentIndex != _profileTabIndex || !mounted) return;
+    _loadScoreHistoryOnce();
   }
 
-  static const int _profileTabIndex = 4;
+  Future<void> _loadScoreHistoryOnce() async {
+    if (_scoreHistoryLoaded) return;
+    _scoreHistoryLoaded = true;
 
-  void _onProfileTabSelected() {
-    if (AppTabController.instance.currentIndex == _profileTabIndex && mounted) {
-      _refreshProfileData();
-    }
-  }
-
-  Future<void> _refreshProfileData() async {
-    await _loadScoreHistory();
-  }
-
-  Future<void> _loadScoreHistory() async {
     setState(() => _scoreHistoryLoading = true);
     try {
-      final dashboard = await DashboardApi().getHome();
+      final list = await ReservationApi().getMyReservations();
       if (!mounted) return;
 
-      final scoreRaw = dashboard['responsibilityScore'];
-      if (scoreRaw is num) {
-        ResponsibilityLedger.instance.setHomeContext(mockOnly: scoreRaw.toInt());
-      }
-
-      var entries = _scoreHistoryFromDashboard(dashboard['scoreHistory']);
-      if (entries.isEmpty) {
-        entries = await _scoreHistoryFromReservations();
+      final entries = <ProfileScoreEntry>[];
+      for (final ReservationDetail r in list) {
+        final delta = r.scoreEffect;
+        if (delta == null) continue;
+        entries.add(
+          ProfileScoreEntry(
+            id: r.id,
+            date: r.date,
+            scoreChange: delta,
+            description: r.scoreEffectDescription,
+          ),
+        );
       }
       entries.sort((a, b) => b.date.compareTo(a.date));
 
@@ -100,58 +99,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     } catch (_) {
       if (!mounted) return;
-      try {
-        final entries = await _scoreHistoryFromReservations();
-        setState(() {
-          _scoreHistory = entries;
-          _scoreHistoryLoading = false;
-        });
-      } catch (_) {
-        setState(() {
-          _scoreHistory = [];
-          _scoreHistoryLoading = false;
-        });
-      }
+      setState(() {
+        _scoreHistory = [];
+        _scoreHistoryLoading = false;
+      });
     }
-  }
-
-  List<ProfileScoreEntry> _scoreHistoryFromDashboard(dynamic raw) {
-    if (raw is! List) return [];
-    final entries = <ProfileScoreEntry>[];
-    for (final item in raw) {
-      if (item is! Map) continue;
-      final m = Map<String, dynamic>.from(item);
-      final delta = ReservationScore.parseDelta(m['scoreChange']);
-      if (delta == null) continue;
-      entries.add(
-        ProfileScoreEntry(
-          id: m['id']?.toString() ?? '',
-          date: m['date']?.toString() ?? '',
-          scoreChange: delta,
-          description: m['description']?.toString() ?? 'Reservation update',
-        ),
-      );
-    }
-    return entries;
-  }
-
-  Future<List<ProfileScoreEntry>> _scoreHistoryFromReservations() async {
-    final list = await ReservationApi().getMyReservations();
-    final entries = <ProfileScoreEntry>[];
-    for (final ReservationDetail r in list) {
-      if (!ReservationScore.isTerminalStatus(r.status)) continue;
-      final delta = ReservationScore.resolve(r);
-      if (delta == null) continue;
-      entries.add(
-        ProfileScoreEntry(
-          id: r.id,
-          date: r.date,
-          scoreChange: delta,
-          description: ReservationScore.descriptionFor(r, delta),
-        ),
-      );
-    }
-    return entries;
   }
 
   bool get _prefsComplete =>

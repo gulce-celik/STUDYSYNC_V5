@@ -5,8 +5,8 @@ import '../../../core/network/dashboard_api.dart';
 import '../../../core/trust/responsibility_ledger.dart';
 import '../../../shared/check_in/check_in_window.dart';
 import '../../../shared/check_in/reservation_check_in_sheet.dart';
-import '../../../shared/reservations/reservation_score.dart';
 import '../../reservation/data/reservation_api.dart';
+import '../../reservation/domain/reservation_detail_score.dart';
 import '../../reservation/domain/reservation_models.dart';
 import '../data/bookings_mock_data.dart';
 
@@ -94,8 +94,6 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         return (const Color(0xFFF3F4F6), const Color(0xFF374151));
     }
   }
-
-  int? _scoreImpact(ReservationDetail r) => ReservationScore.resolve(r);
 
   String _scoreImpactLabel(int delta) {
     if (delta > 0) return 'Responsibility score +$delta';
@@ -326,11 +324,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                         _miniIcon(Icons.groups_2_outlined, 'Group (${r.participants.length})'),
                                     ],
                                   ),
-                                  if (ReservationScore.shouldShowBadge(r)) ...[
+                                  if (r.hasScoreEffect) ...[
                                     const SizedBox(height: 8),
                                     Builder(
                                       builder: (context) {
-                                        final delta = _scoreImpact(r)!;
+                                        final delta = r.scoreEffect!;
                                         final positive = delta > 0;
                                         final negative = delta < 0;
                                         return Container(
