@@ -48,7 +48,7 @@ public final class ReservationMapper {
                 r.getCourseCode() != null ? r.getCourseCode() : "",
                 participants,
                 qr,
-                r.getScore());
+                resolveScore(r));
     }
 
     /**

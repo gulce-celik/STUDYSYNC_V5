@@ -85,7 +85,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ProfileScoreEntry(
             id: r.id,
             date: r.date,
-            score: r.score,
+            score: r.effectiveScore,
             description: r.scoreEffectDescription,
           ),
         );

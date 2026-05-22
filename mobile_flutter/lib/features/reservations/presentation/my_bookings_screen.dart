@@ -328,7 +328,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                     const SizedBox(height: 8),
                                     Builder(
                                       builder: (context) {
-                                        final delta = r.score;
+                                        final delta = r.effectiveScore;
                                         final positive = delta > 0;
                                         final negative = delta < 0;
                                         return Container(
