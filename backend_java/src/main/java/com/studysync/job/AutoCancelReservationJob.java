@@ -8,6 +8,7 @@ import com.studysync.domain.repository.ReservationRecordRepository;
 import com.studysync.domain.service.ResponsibilityScoreService;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import org.slf4j.Logger;
@@ -47,24 +48,33 @@ public class AutoCancelReservationJob {
     @Transactional
     public void cancelNoShows() {
         String today = LocalDate.now(clock).toString();
-        List<ReservationRecord> activeReservations = reservationRepository.findByDateAndStatusIn(
+        List<ReservationRecord> activeReservations = reservationRepository.findByDateLessThanEqualAndStatusIn(
                 today, List.of("ACTIVE", "PENDING"));
 
-        LocalTime now = LocalTime.now(clock);
+        LocalDateTime now = LocalDateTime.now(clock);
 
         for (ReservationRecord record : activeReservations) {
             processRecordIfNoShow(record, now);
         }
     }
 
-    void processRecordIfNoShow(ReservationRecord record, LocalTime now) {
+    void processRecordIfNoShow(ReservationRecord record, LocalDateTime now) {
         LocalTime startTime = SlotStartTimeResolver.resolve(record);
         if (startTime == null) {
             logger.warn("Skipping reservation {} — cannot resolve slot start time", record.getId());
             return;
         }
 
-        LocalTime deadline = startTime.plusMinutes(QrCheckInPolicy.GRACE_AFTER_START_MINUTES);
+        LocalDate reservationDate;
+        try {
+            reservationDate = LocalDate.parse(record.getDate());
+        } catch (Exception e) {
+            logger.warn("Skipping reservation {} — invalid date {}", record.getId(), record.getDate());
+            return;
+        }
+
+        LocalDateTime slotStart = LocalDateTime.of(reservationDate, startTime);
+        LocalDateTime deadline = slotStart.plusMinutes(QrCheckInPolicy.GRACE_AFTER_START_MINUTES);
         if (!now.isAfter(deadline)) {
             return;
         }
@@ -85,7 +95,7 @@ public class AutoCancelReservationJob {
         logger.info(
                 "Reservation {} marked NO_SHOW (slot start {}, deadline {}). User {} score {}.",
                 record.getId(),
-                startTime,
+                slotStart,
                 deadline,
                 userId,
                 noShowScore);

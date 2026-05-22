@@ -8,6 +8,7 @@ Living log of shipped features — what was built, where it lives, how to verify
 |---------|--------|---------|
 | Reservation `score` | Done | 2026-05-22 |
 | Same-day slot booking | Done | 2026-05-22 |
+| No-show auto-cancel (past dates) | Done | 2026-05-22 |
 
 ---
 
@@ -66,6 +67,29 @@ cd mobile_flutter && flutter test test/slot_booking_window_test.dart
 
 ---
 
+## 3. No-show auto-cancel (past dates)
+
+Scheduled job marks unchecked `ACTIVE` / `PENDING` reservations as `NO_SHOW` after the QR grace window closes (slot start + 15 min, campus time).
+
+**Bug fixed:** job only queried **today** and compared `LocalTime`, so missed reservations from earlier days stayed `ACTIVE` forever.
+
+| Before | After |
+|--------|-------|
+| `findByDateAndStatusIn(today, …)` | `findByDateLessThanEqualAndStatusIn(today, …)` |
+| `now` vs slot start time only | `now` vs `LocalDateTime` (date + slot start + 15 min) |
+
+**Backend:** `ReservationRecordRepository.findByDateLessThanEqualAndStatusIn`, `AutoCancelReservationJob` (`SlotStartTimeResolver`, `QrCheckInPolicy.GRACE_AFTER_START_MINUTES`), `ResponsibilityScoreService.applyDelta` with `ReservationScoringPolicy.NO_SHOW_SCORE` (`-10`).
+
+**Verify:** unit tests cover past-date stale reservations, today before/after deadline, exact deadline boundary, invalid date skip.
+
+```bash
+cd backend_java && mvn test -Dtest=AutoCancelReservationJobTest
+```
+
+**Out of scope:** `@DataJpaTest` repository query test, manual cron smoke on prod DB.
+
+---
+
 ## Changelog
 
 | Date | Change |
@@ -73,3 +97,4 @@ cd mobile_flutter && flutter test test/slot_booking_window_test.dart
 | 2026-05-22 | Reservation `score` — entity, API, History/Profile UI |
 | 2026-05-22 | History fix — `resolveScore` + `effectiveScore` |
 | 2026-05-22 | Same-day guard — backend validation + Reserve UI |
+| 2026-05-22 | No-show job — `date ≤ today` query + `LocalDateTime` deadline; `AutoCancelReservationJobTest` |
