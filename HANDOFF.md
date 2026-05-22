@@ -16,7 +16,7 @@
 
 - [ ] **Password Change:** Password change process works, but the error screen continues to show in the background.
 - [X] **Course Edit:** The course edit function is not working.
-- [ ] **Check-in System:** Check-in can be done at any time. **Rule:** If check-in is not completed within the first 15 minutes, the reservation must be automatically canceled.
+- [X] **Check-in System:** **Partial → largely done (2026-05-22).** QR verify + 15‑min window (mobile + backend, Istanbul TZ). No-show job marks `NO_SHOW` and −10 after window. See work log **2026-05-22**.
 - [ ] **Email Verification/Delivery:** Emails containing verification/password codes are not being delivered.
 - [ ] **Duplicate Email Registration:** The check for accounts with the same email is done too late. (Should be validated earlier / on the frontend).
 
@@ -36,7 +36,47 @@
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
-## Frontend work log (mobile_flutter only)
+## Work log
+
+### 2026-05-22 — QR check-in, desk codes, no-show job, history score (backend + mobile)
+
+**Git (pushed to `main` on `gulce-celik/STUDYSYNC_V5`):**
+- `f6d658f` — static desk QR + 15‑minute check-in window
+- `64eba9f` — Istanbul timezone for check-in policy
+- *(local, not yet pushed at handoff update)* — desk number as `qrPayload`, `scoreChange` on history, no-show job −10
+
+#### Backend (`backend_java/`)
+
+| Area | What changed |
+|------|----------------|
+| **Desk QR** | `WorkspaceQrRegistry` — static codes: `desk-N` → desk number `N` (e.g. `desk-12` → `12`), `group-N` → `GN`. Exposed on `GET /reservations/workspaces` as `qrCode` and on reservations as `qrPayload`. |
+| **Create reservation** | `ReservationService` sets `qrPayload` from registry on `POST /reservations`. |
+| **Check-in** | `POST /checkin/verify` — QR must match desk code; allowed only on reservation day from **15 min before** slot start until **15 min after** start (`QrCheckInPolicy`, `SlotStartTimeResolver`). |
+| **Timezone** | `TimeConfig` uses `Europe/Istanbul` (fixes Render UTC vs campus slot times). Clear rejection messages on verify. |
+| **No-show job** | `AutoCancelReservationJob` (every minute): today’s `ACTIVE`/`PENDING` without check-in by slot start + 15 min → status `NO_SHOW`, `scoreChange = -10`, `ResponsibilityScoreService.applyDelta(-10)`. |
+| **History scoring** | `ReservationRecord.scoreChange` persisted: check-in `+5`, no-show `−10`, cancel per `CancellationScoringPolicy` (−5 / 0 / +3). Returned on `GET /reservations/me` as `scoreChange` (legacy rows: fallback +5 / −10 where null). |
+| **DTO** | `ReservationDetailDto`: `qrPayload`, `scoreChange`. `WorkspaceDto`: `qrCode`. |
+
+**Key files:** `domain/campus/WorkspaceQrRegistry.java`, `domain/policy/QrCheckInPolicy.java`, `domain/policy/SlotStartTimeResolver.java`, `job/AutoCancelReservationJob.java`, `config/TimeConfig.java`, `domain/service/CheckInService.java`, `domain/service/ReservationService.java`, `domain/mapper/ReservationMapper.java`.
+
+**Check-in test (desk-12, slot 11:00–13:00, Istanbul):** enter `12` between **10:45–11:15** on reservation day.
+
+#### Mobile (`mobile_flutter/`)
+
+| Area | What changed |
+|------|----------------|
+| **Check-in window** | `CheckInWindow` — button/sheet enabled only 15 min before → 15 min after slot start; hints (“Opens at …”, “window closed”). Uses `slotId` + `slotLabel` for start time. |
+| **My Bookings / Home** | QR Check-In disabled outside window; check-in sheet blocks submit when closed. |
+| **History tab** | Shows `scoreChange` from API (not hardcoded +3/−2). Cancel sends real `slotStartAt` via `CheckInWindow.slotStartLocal`. Badge: green / red / grey for 0. |
+| **Copy** | Desk number hint (e.g. `12` for desk-12). |
+
+**Tests:** `test/check_in_window_test.dart` updated.
+
+#### Still open (unchanged)
+
+- Admin APIs, notifications API, email/OTP, forgot-password backend, buddy matching, etc. — see tables below.
+
+------------------------------------------------------------------------------
 
 ### 2026-05-21 (Live Deployment & Shared DB)
 
@@ -65,7 +105,7 @@
 **Backend (still needed)**  
 - **Admin APIs:** staff auth, dashboard KPIs, student list, buddy reports, persist restrictions/warnings, floor-plan (desk/group counts), workspace closures.  
 - **Notifications:** `GET /notifications` + mark-read + server events (invite, reminder, moderation).  
-- **Existing gaps (unchanged):** forgot-password, lost-found PATCH found, profile/courses persist, `qrPayload` on bookings, email/OTP, 15-min no-show job.
+- **Existing gaps (updated 2026-05-22):** forgot-password, lost-found PATCH found, profile/courses persist, email/OTP. ~~`qrPayload` on bookings~~, ~~15-min no-show job~~ **done** — see **2026-05-22**.
 
 *Session detail: see ### 2026-05-17 below.*
 
@@ -76,7 +116,7 @@
 
 - **Password change UI (Profile):** Refactored the change-password bottom sheet so validation and API errors render **inside the sheet** (inline text), not via `SnackBar` on the parent screen (which appeared behind the modal). Added loading state on Save, close button, and success `SnackBar` only after the sheet closes. File: `mobile_flutter/lib/features/profile/presentation/profile_screen.dart`. Uses existing `PUT /auth/password` — no backend changes.
 
-- **QR check-in (My Bookings + Home):** Replaced demo “Mark as Checked-In” with `POST /checkin/verify` via shared `showReservationCheckInSheet` + `CheckInApi`. Inline errors/loading on sheet; refreshes bookings/dashboard after success. Client hints: reservation must be **today**, 15-minute window warning (server still owns final rules). Offline mock list disables check-in with a clear message. Tests: `mobile_flutter/test/check_in_window_test.dart`. **Backend not changed.** Note for E2E: `ReservationDetailDto` does not yet expose `qrPayload` on `GET /reservations/me` — users may need to paste QR manually until backend adds that field (ask backend owner before changing Java).
+- **QR check-in (My Bookings + Home):** `POST /checkin/verify` via `showReservationCheckInSheet` + `CheckInApi`. **2026-05-22 backend:** `qrPayload` on `GET /reservations/me`, desk-number QR, 15‑min window, Istanbul TZ, no-show job. **2026-05-22 mobile:** window-gated button + `scoreChange` on history. Tests: `check_in_window_test.dart`.
 
 - **Course edit (Profile):** “Edit” under My Courses now opens `edit_enrolled_courses_sheet.dart` (multi-select, `GET /courses` with catalog fallback). Saves to `AuthSession.enrolledCourseCodes` for reservation/buddy filters this session. Removed wrong navigation to Weekly Schedule. Server persistence still needs a future profile API — no backend change.
 
@@ -173,7 +213,7 @@
 |---------------|---------------|
 | Password change background error | **Done** (inline in sheet) |
 | Course edit | **Partial** (session `AuthSession`; no profile PUT) |
-| Check-in 15 min / auto-cancel | **Partial** (API verify + client window; cancel = backend) |
+| Check-in 15 min / auto-cancel | **Done** (backend window + `AutoCancelReservationJob` → `NO_SHOW` / −10; mobile window UI) |
 | Email delivery / OTP | **Not done** (register OTP still client demo) |
 | Duplicate email early | **Partial** (409 → step 1; no `check-email` API) |
 | Lost item found | **Partial** (Found UI; PATCH backend) |
@@ -198,20 +238,21 @@
 |------|-----|
 | **Admin:** `POST /admin/auth/login`, `GET /admin/dashboard`, `GET /admin/students`, `GET/POST /admin/buddy-reports`, `PUT /admin/floor-plan`, workspace closures, user restrictions/warnings | Replace mock admin data + session-only moderation/layout |
 | **Notifications:** `GET /notifications`, mark-read, server event emitters (invite, reminder, moderation; waitlist later per SR-28) | Replace demo inbox; enable real unread counts |
-| `qrPayload` on `GET /reservations/me` | QR check-in without manual paste |
+| ~~`qrPayload` on `GET /reservations/me`~~ | **Done 2026-05-22** — desk number + `qrCode` on workspaces |
+| ~~15-min no-show job~~ | **Done 2026-05-22** — `AutoCancelReservationJob` → `NO_SHOW`, −10 |
 | `POST /auth/forgot-password` | Forgot-password screen (handles 404/501 today) |
-| `PATCH /lost-found/{id}/found` | Persist “Found”; hide map marker |
+| `PATCH /lost-found/{id}/found` | Persist “Found”; hide map marker (endpoint may exist — verify mobile wiring) |
 | `GET /lost-found` filter / `expiresAt` | Optional: active-only list, 24h policy |
 | Set `reportedBy` on `POST /lost-found` | JWT user on report |
 | `StudyBuddyService.getSuggestions` | Real buddy matches instead of sample fallback |
-| Profile PUT for `enrolledCourseCodes` | Persist course edit from profile |
+| `PUT /auth/me/courses` | Persist course edit from profile (endpoint exists; mobile may not call yet) |
 | `GET /auth/check-email` | Early duplicate email on register |
-| Email delivery + refresh token store + 15-min no-show job | Production parity |
+| Email delivery + refresh token store | Production parity |
 
 ### Lost & Found — backend today vs missing
 
 | Have (Java) | Missing |
 |-------------|---------|
-| `GET /lost-found`, `POST /lost-found` | `PATCH` mark FOUND |
+| `GET /lost-found`, `POST /lost-found`, `PATCH /{id}/found` | Mobile/backend polish (`reportedBy`, expiry) |
 | Entity `status`, `category`, `reportedBy` field | `reportedBy` not set on POST |
 | H2 persistence in dev | 24h expiry job, `expiresAt` in DTO |

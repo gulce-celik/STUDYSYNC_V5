@@ -18,6 +18,7 @@ public record ReservationDetailDto(
         String status,
         String courseCode,
         List<String> participants,
-        String qrPayload
+        String qrPayload,
+        Integer scoreChange
 ) {
 }

@@ -185,7 +185,8 @@ public class ReservationService {
         }
 
         ReservationRecord saved = reservationRepository.save(record);
-        return ReservationMapper.toDetail(saved, objectMapper, workspaceQrRegistry.qrFor(saved.getWorkspaceId()));
+        return ReservationMapper.toDetail(
+                saved, objectMapper, workspaceQrRegistry.qrFor(saved.getWorkspaceId()));
     }
 
     public List<ReservationDetailDto> myReservations() {
@@ -229,6 +230,7 @@ public class ReservationService {
 
         // Update state
         record.setStatus("CANCELLED");
+        record.setScoreChange(result.scoreChange());
         reservationRepository.saveAndFlush(record);
 
         // Antigravity Modification: Enforce history limit (max 10 completed/cancelled

@@ -62,10 +62,12 @@ public class CheckInService {
             return new CheckInResultDto(false, qrReason);
         }
 
+        final int scoreDelta = 5;
         reservation.setStatus("COMPLETED");
+        reservation.setScoreChange(scoreDelta);
         reservationRepository.saveAndFlush(reservation);
 
-        responsibilityScoreService.applyDelta(reservation.getUser().getId(), 5);
+        responsibilityScoreService.applyDelta(reservation.getUser().getId(), scoreDelta);
 
         // Antigravity Modification: Enforce history limit (max 10 completed/cancelled elements)
         Long userId = reservation.getUser().getId();

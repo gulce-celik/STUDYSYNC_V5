@@ -94,21 +94,15 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
-  DateTime? _approxSlotStart(ReservationDetail r) {
-    return DateTime.tryParse('${r.date}T09:00:00');
+  int? _scoreImpact(ReservationDetail r) {
+    if (!_isHistoryTab(r)) return null;
+    return r.scoreChange;
   }
 
-  int? _scoreImpact(ReservationDetail r) {
-    switch (r.status.toUpperCase()) {
-      case 'COMPLETED':
-        return 3;
-      case 'NO_SHOW':
-        return -10;
-      case 'CANCELLED':
-        return -2;
-      default:
-        return null;
-    }
+  String _scoreImpactLabel(int delta) {
+    if (delta > 0) return 'Responsibility score +$delta';
+    if (delta < 0) return 'Responsibility score $delta';
+    return 'No responsibility score change';
   }
 
   Future<void> _cancel(ReservationDetail r) async {
@@ -125,7 +119,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     );
     if (ok != true || !mounted) return;
     try {
-      final start = _approxSlotStart(r);
+      final start = CheckInWindow.slotStartLocal(r);
       await _api.cancelReservation(
         r.id,
         cancelledAt: DateTime.now(),
@@ -335,22 +329,35 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                   ),
                                   if (_isHistoryTab(r) && _scoreImpact(r) != null) ...[
                                     const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: _scoreImpact(r)! >= 0 ? const Color(0xFFD1FAE5) : const Color(0xFFFEE2E2),
-                                        borderRadius: BorderRadius.circular(999),
-                                      ),
-                                      child: Text(
-                                        _scoreImpact(r)! >= 0
-                                            ? 'Responsibility score +${_scoreImpact(r)}'
-                                            : 'Responsibility score ${_scoreImpact(r)}',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: _scoreImpact(r)! >= 0 ? const Color(0xFF065F46) : const Color(0xFF991B1B),
-                                        ),
-                                      ),
+                                    Builder(
+                                      builder: (context) {
+                                        final delta = _scoreImpact(r)!;
+                                        final positive = delta > 0;
+                                        final negative = delta < 0;
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: positive
+                                                ? const Color(0xFFD1FAE5)
+                                                : negative
+                                                    ? const Color(0xFFFEE2E2)
+                                                    : const Color(0xFFF3F4F6),
+                                            borderRadius: BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            _scoreImpactLabel(delta),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: positive
+                                                  ? const Color(0xFF065F46)
+                                                  : negative
+                                                      ? const Color(0xFF991B1B)
+                                                      : const Color(0xFF374151),
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ],
                                   if (_isCheckedIn(r)) ...[

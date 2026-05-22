@@ -196,7 +196,7 @@ class _ReservationCheckInSheetState extends State<_ReservationCheckInSheet> {
           const SizedBox(height: 8),
           Text(
             CheckInWindow.canCheckInNow(r)
-                ? 'Enter the 4-digit desk QR. Window closes 15 minutes after slot start.'
+                ? 'Enter the desk number (e.g. 12 for desk-12). Window closes 15 minutes after slot start.'
                 : (CheckInWindow.availabilityHint(r) ??
                     'Check-in opens 15 minutes before your slot start.'),
             style: const TextStyle(fontSize: 11, height: 1.35, color: Color(0xFF6B7280)),

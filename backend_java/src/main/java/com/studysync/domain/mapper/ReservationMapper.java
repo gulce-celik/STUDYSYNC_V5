@@ -47,7 +47,20 @@ public final class ReservationMapper {
                 r.getStatus(),
                 r.getCourseCode() != null ? r.getCourseCode() : "",
                 participants,
-                qr);
+                qr,
+                resolveScoreChange(r));
+    }
+
+    /** Persisted value, with legacy fallback when older rows have no column set. */
+    private static Integer resolveScoreChange(ReservationRecord r) {
+        if (r.getScoreChange() != null) {
+            return r.getScoreChange();
+        }
+        return switch (r.getStatus() != null ? r.getStatus().toUpperCase() : "") {
+            case "COMPLETED" -> 5;
+            case "NO_SHOW" -> -10;
+            default -> null;
+        };
     }
 
     private static List<String> parseParticipants(String json, ObjectMapper objectMapper) {
