@@ -137,18 +137,40 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
     return h > 0 ? '${h}h left' : 'Expired';
   }
 
-  void _markFound(_LostRow row) {
-    setState(() {
-      _items = _items.map((e) => e.id == row.id ? e.copyWith(status: 'FOUND') : e).toList();
-    });
-    LostFoundMapSync.notifyChanged();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Marked as found in this session. Backend needs PATCH /lost-found/{id}/found to persist.',
-        ),
-      ),
-    );
+  void _markFound(_LostRow row) async {
+    try {
+      final res = await _lostFoundApi.markAsFound(row.id);
+      if (res['success'] == true) {
+        if (!mounted) return;
+        setState(() {
+          _items = _items.map((e) => e.id == row.id ? e.copyWith(status: 'FOUND') : e).toList();
+        });
+        LostFoundMapSync.notifyChanged();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Item marked as found!'),
+          ),
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Failed to mark as found'),
+          ),
+        );
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final msg = e.response?.data?['message']?.toString() ?? 'PATCH /lost-found failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update status — check connection')),
+      );
+    }
   }
 
   void _openReport() {

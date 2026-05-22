@@ -16,4 +16,9 @@ class LostFoundApi {
     );
     return response.data as Map<String, dynamic>;
   }
+
+  Future<Map<String, dynamic>> markAsFound(String id) async {
+    final response = await ApiClient.instance.dio.patch('/lost-found/$id/found');
+    return response.data as Map<String, dynamic>;
+  }
 }
