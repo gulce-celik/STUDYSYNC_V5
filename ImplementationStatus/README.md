@@ -9,7 +9,7 @@ Living log of shipped features — what was built, where it lives, how to verify
 | Reservation `score` | Done | 2026-05-22 |
 | Same-day slot booking | Done | 2026-05-22 |
 | No-show auto-cancel (past dates) | Done | 2026-05-22 |
-| Lost & Found (backend) | Done | 2026-05-23 |
+| Lost & Found (backend) | Partial — known bugs | 2026-05-23 |
 
 ---
 
@@ -95,24 +95,43 @@ cd backend_java && mvn test -Dtest=AutoCancelReservationJobTest
 
 Active reports only on `GET /lost-found`; 24h visibility; `reportedBy` from JWT on POST; scheduled expiry.
 
-| Case | Behavior |
-|------|----------|
-| `POST` | `reportedBy` = JWT user, `status` = `REPORTED` |
-| `GET` | `REPORTED` and `reportedAt + 24h > now`; DTO includes `expiresAt` |
-| `PATCH /{id}/found` | `FOUND` (rejects expired / already found) |
-| After 24h | `ExpireLostItemsJob` → `EXPIRED` (hidden from GET + map) |
+| Case | Behavior (intended) |
+|------|-------------------|
+| `POST` | `reportedBy` = JWT user, `status` = `REPORTED`, DTO includes `reportedByUserId` |
+| `GET` | `REPORTED` / `LOST` and `reportedAt + 24h > now`; DTO includes `expiresAt` |
+| `PATCH /{id}/found` | Any logged-in user; `FOUND` (rejects expired / already found) |
+| After 24h | `ExpireLostItemsJob` deletes stale rows (hidden from GET + map) |
 
-**Backend:** `LostFoundPolicy`, `LostFoundService`, `SecurityUtils`, `LostItemMapper`, `ExpireLostItemsJob`; POST returns `{ success, message, item }`; `reportedBy` via `getReferenceById`.
+**Backend:** `LostFoundPolicy`, `LostFoundService`, `LostItemMapper`, `LostItemRecordRepository.findByIdWithReporter`, `ExpireLostItemsJob`; reporter resolved with `UserAccountRepository.findById` (not lazy reference).
 
-**Flutter:** no mock fallback ids; **Found** needs numeric server id; POST checks `success`; list reloads after **Found**.
-
-**Verify:** report item → appears in list + map; **Found** → disappears on refresh; wait 24h (or unit test) → `EXPIRED`.
+**Flutter:** `LostFoundApi` → Render `AppConfig.baseUrl` by default; **Found** needs numeric server `id`; POST checks `success`; list reloads after **Found**; debug logs `[LostFound]` in debug builds.
 
 ```bash
 cd backend_java && mvn test -Dtest=LostFoundServiceTest
 ```
 
 **Out of scope:** admin L&F moderation UI, photo upload, category picker.
+
+### Known bugs (open)
+
+Reported on device against production (`https://studysync-56nq.onrender.com/api/v1`) — **still failing after** commits `10d86b5`, `0085a82` until Render redeploy + app rebuild are confirmed.
+
+| Bug | Symptom | Likely cause | How to verify |
+|-----|---------|--------------|---------------|
+| **Found → “not found”** | Tap **Found**; snackbar shows *not found* or `Item not found (id=…) — pull to refresh` | PATCH `id` not in DB (stale list), or **production** still on old build without `findByIdWithReporter` / PATCH route | After report, note list `id`; `PATCH /lost-found/{id}/found` with JWT; check `lost_items.id` in Neon |
+| **`reportedByUserId` missing** | New report does not persist / return reporter account id | `reported_by_user_id` null in DB (old schema, failed FK, or deploy lag); JWT user id ≠ row in `user_accounts` | `SELECT id, reported_by_user_id, status FROM lost_items ORDER BY id DESC LIMIT 5`; POST body should include `reportedByUserId` |
+| **App vs local backend** | Fixes on `main` don’t change app behavior | Mobile defaults to **Render**, not `localhost` | `flutter run --dart-define=API_BASE=http://10.0.2.2:8080/api/v1` (emulator) or PC LAN IP on physical device |
+| **Stale list** | Row visible but Found fails | 24h expiry job removed row; UI not refreshed | Pull to refresh before **Found** |
+
+**Debug checklist**
+
+1. Log out → log in (fresh JWT).
+2. Render dashboard → **Manual Deploy** on backend service → wait until Live.
+3. `flutter run` (full restart, not hot reload only).
+4. Report item → read snackbar / debug console: `[LostFound] POST /lost-found item → id=… reporter=…`.
+5. Tap **Found** → if fail, copy full snackbar text and compare `id` to DB.
+
+**Code fixes attempted (on `main`, needs deploy):** reporter `findById`, reload after POST, `findByIdWithReporter` for PATCH, delete-after-24h job, any-user **Found**.
 
 ---
 
@@ -144,9 +163,12 @@ Tracked from [HANDOFF.md](../HANDOFF.md) (2026-05-22). Mobile-only work is omitt
 | | Task | Notes |
 |---|------|--------|
 | [x] | Wire mobile **Found** to `PATCH /lost-found/{id}/found` | `LostFoundApi.markAsFound` + screen handler |
-| [x] | Set `reportedBy` on `POST /lost-found` | `@AuthenticationPrincipal` on POST |
-| [x] | `GET /lost-found` filters + `expiresAt` in DTO | Active `REPORTED` within 24h |
-| [x] | Expiry cleanup job | `ExpireLostItemsJob` → `EXPIRED` |
+| [x] | Set `reportedBy` on `POST /lost-found` | `@AuthenticationPrincipal` + `findById` reporter (see **§4 known bugs**) |
+| [x] | `GET /lost-found` filters + `expiresAt` in DTO | Active open statuses within 24h |
+| [x] | Expiry cleanup job | `ExpireLostItemsJob` deletes stale rows |
+| [ ] | **Found works end-to-end on prod** | Snackbar *not found* — see **§4 Known bugs** |
+| [ ] | **`reportedByUserId` on prod DB** | Reporter id null / not returned — see **§4 Known bugs** |
+| [ ] | Confirm Render deploy | `main` pushed; service must redeploy before mobile retest |
 
 ### Study Buddy
 
@@ -201,3 +223,4 @@ cd backend_java && mvn test
 | 2026-05-22 | No-show job — `date ≤ today` query + `LocalDateTime` deadline; `AutoCancelReservationJobTest` |
 | 2026-05-22 | Backend TODO section — from HANDOFF (auth, admin, notifications, L&F, buddy) |
 | 2026-05-23 | Lost & Found — `reportedBy`, active GET + `expiresAt`, `ExpireLostItemsJob`, mobile `expiresAt` |
+| 2026-05-23 | Lost & Found — §4 **Known bugs**: Found *not found*, `reportedByUserId` missing, Render/deploy checklist |
