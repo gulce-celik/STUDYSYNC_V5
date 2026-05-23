@@ -242,16 +242,7 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text(res['message']?.toString() ?? 'Item reported!')),
                         );
-                        final item = res['item'];
-                        if (item is Map) {
-                          final row = _LostRow.fromApi(Map<String, dynamic>.from(item));
-                          setState(() {
-                            _items = [row, ..._items.where((e) => e.id != row.id)];
-                            _loadError = null;
-                          });
-                        } else {
-                          await _loadItems();
-                        }
+                        await _loadItems();
                         LostFoundMapSync.notifyChanged();
                       } on DioException catch (e) {
                         if (!context.mounted) return;
