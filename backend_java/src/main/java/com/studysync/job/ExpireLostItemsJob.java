@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Hides lost-item reports after {@link com.studysync.domain.policy.LostFoundPolicy#REPORT_TTL_HOURS} hours. */
+/** Removes lost-item reports after {@link com.studysync.domain.policy.LostFoundPolicy#REPORT_TTL_HOURS} hours. */
 @Component
 public class ExpireLostItemsJob {
 
@@ -27,7 +27,7 @@ public class ExpireLostItemsJob {
     public void expireStaleReports() {
         int count = lostFoundService.expireStaleReports(clock.instant());
         if (count > 0) {
-            logger.info("Expired {} lost-item report(s)", count);
+            logger.info("Deleted {} expired lost-item report(s)", count);
         }
     }
 }

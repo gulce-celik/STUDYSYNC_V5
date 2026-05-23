@@ -72,7 +72,17 @@ public class LostFoundService {
     }
 
     @Transactional
-    public ActionResultDto markAsFound(String id) {
+    public ActionResultDto markAsFound(String id, UserAccount authenticatedUser) {
+        UserAccount principal;
+        try {
+            principal = authenticatedUser != null ? authenticatedUser : SecurityUtils.requireCurrentUser();
+        } catch (IllegalStateException ex) {
+            return new ActionResultDto(false, ex.getMessage(), null, null);
+        }
+        if (principal.getId() == null) {
+            return new ActionResultDto(false, "Authentication is missing. Please log in first.", null, null);
+        }
+
         String trimmed = id != null ? id.trim() : "";
         Long recordId;
         try {
@@ -101,19 +111,15 @@ public class LostFoundService {
                         false, "Item not found (id=" + recordId + ") — refresh the list", null, null));
     }
 
-    /** Marks open items past the 24h window as {@code EXPIRED}. */
+    /** Deletes open items past the 24h visibility window. */
     @Transactional
     public int expireStaleReports(Instant now) {
-        int expired = 0;
-        for (LostItemRecord record :
-                lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.OPEN_STATUSES)) {
-            if (LostFoundPolicy.isActive(record, now)) {
-                continue;
-            }
-            record.setStatus(LostFoundPolicy.STATUS_EXPIRED);
-            lostItemRepository.save(record);
-            expired++;
+        var stale = lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.OPEN_STATUSES).stream()
+                .filter(record -> !LostFoundPolicy.isActive(record, now))
+                .toList();
+        if (!stale.isEmpty()) {
+            lostItemRepository.deleteAll(stale);
         }
-        return expired;
+        return stale.size();
     }
 }

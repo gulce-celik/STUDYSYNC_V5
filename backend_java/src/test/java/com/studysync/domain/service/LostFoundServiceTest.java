@@ -95,7 +95,8 @@ class LostFoundServiceTest {
 
     @Test
     void markAsFound_rejectsNonNumericId() {
-        var result = service.markAsFound("lost-1");
+        UserAccount reporter = reporter(7L);
+        var result = service.markAsFound("lost-1", reporter);
 
         assertFalse(result.success());
         assertTrue(result.message().contains("Invalid item id"));
@@ -103,23 +104,27 @@ class LostFoundServiceTest {
 
     @Test
     void markAsFound_rejectsExpiredReport() {
+        UserAccount reporter = reporter(7L);
         LostItemRecord record = reportedItem("desk-5", NOW.minus(25, ChronoUnit.HOURS));
         setRecordId(record, 5L);
+        record.setReportedBy(reporter);
         when(lostItemRepository.findById(5L)).thenReturn(Optional.of(record));
 
-        var result = service.markAsFound("5");
+        var result = service.markAsFound("5", reporter);
 
         assertFalse(result.success());
         assertEquals("Item report has expired", result.message());
     }
 
     @Test
-    void markAsFound_updatesActiveReport() {
+    void markAsFound_allowsAnyAuthenticatedUser() {
+        UserAccount finder = reporter(8L);
         LostItemRecord record = reportedItem("desk-6", NOW.minus(1, ChronoUnit.HOURS));
         setRecordId(record, 6L);
+        record.setReportedBy(reporter(7L));
         when(lostItemRepository.findById(6L)).thenReturn(Optional.of(record));
 
-        var result = service.markAsFound("6");
+        var result = service.markAsFound("6", finder);
 
         assertTrue(result.success());
         assertEquals(LostFoundPolicy.STATUS_FOUND, record.getStatus());
@@ -127,7 +132,7 @@ class LostFoundServiceTest {
     }
 
     @Test
-    void expireStaleReports_marksPastTtlAsExpired() {
+    void expireStaleReports_deletesPastTtl() {
         LostItemRecord active = reportedItem("desk-10", NOW.minus(1, ChronoUnit.HOURS));
         LostItemRecord stale = reportedItem("desk-11", NOW.minus(25, ChronoUnit.HOURS));
         when(lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.OPEN_STATUSES))
@@ -136,8 +141,13 @@ class LostFoundServiceTest {
         int count = service.expireStaleReports(NOW);
 
         assertEquals(1, count);
-        assertEquals(LostFoundPolicy.STATUS_EXPIRED, stale.getStatus());
-        verify(lostItemRepository).save(stale);
+        verify(lostItemRepository).deleteAll(List.of(stale));
+    }
+
+    private static UserAccount reporter(long id) {
+        UserAccount user = new UserAccount();
+        setEntityId(user, id);
+        return user;
     }
 
     private void setPrincipalId(UserAccount principal, long id) {

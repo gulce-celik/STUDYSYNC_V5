@@ -46,7 +46,8 @@ public class LostFoundController {
     }
 
     @PatchMapping("/{id}/found")
-    public ActionResultDto markAsFound(@PathVariable String id) {
-        return lostFoundService.markAsFound(id);
+    public ActionResultDto markAsFound(
+            @PathVariable String id, @AuthenticationPrincipal UserAccount currentUser) {
+        return lostFoundService.markAsFound(id, currentUser);
     }
 }

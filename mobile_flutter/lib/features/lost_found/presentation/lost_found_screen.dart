@@ -15,6 +15,7 @@ class _LostRow {
     required this.reportedAt,
     required this.expiresAt,
     required this.status,
+    this.reportedByUserId,
   });
 
   final String id;
@@ -23,8 +24,17 @@ class _LostRow {
   final String reportedAt;
   final String expiresAt;
   final String status;
+  final String? reportedByUserId;
 
   bool get isFound => status.toUpperCase() == 'FOUND';
+
+  bool get isExpired {
+    final expires = DateTime.tryParse(expiresAt.replaceFirst(' ', 'T'));
+    if (expires == null) return false;
+    return !expires.isAfter(DateTime.now());
+  }
+
+  bool get canMarkFound => !isFound && !isExpired && hasServerId;
 
   /// Server rows use numeric ids; offline sample rows use `lost-1` etc.
   bool get hasServerId => int.tryParse(id) != null;
@@ -37,6 +47,7 @@ class _LostRow {
       reportedAt: reportedAt,
       expiresAt: expiresAt,
       status: status ?? this.status,
+      reportedByUserId: reportedByUserId,
     );
   }
 
@@ -61,6 +72,7 @@ class _LostRow {
       reportedAt: reported,
       expiresAt: exp,
       status: m['status']?.toString() ?? 'REPORTED',
+      reportedByUserId: m['reportedByUserId']?.toString(),
     );
   }
 }
@@ -534,7 +546,7 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                     ),
                   )
                 else
-                  ..._items.map(
+                  ..._items.where((e) => !e.isExpired).map(
                   (e) => Card(
                     margin: const EdgeInsets.only(bottom: 10),
                     child: ListTile(
@@ -551,12 +563,12 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                         '${e.workspaceId} • ${e.isFound ? "Found" : _timeRemaining(e.expiresAt)}',
                         style: const TextStyle(fontSize: 11),
                       ),
-                      trailing: e.isFound
-                          ? null
-                          : TextButton(
-                              onPressed: e.hasServerId ? () => _markFound(e) : null,
+                      trailing: e.canMarkFound
+                          ? TextButton(
+                              onPressed: () => _markFound(e),
                               child: const Text('Found', style: TextStyle(fontWeight: FontWeight.w800)),
-                            ),
+                            )
+                          : null,
                     ),
                   ),
                 ),
