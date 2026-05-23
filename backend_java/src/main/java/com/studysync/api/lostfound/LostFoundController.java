@@ -6,9 +6,11 @@ import com.studysync.domain.dto.ActionResultDto;
 import com.studysync.domain.dto.LostFoundReportRequestDto;
 import com.studysync.domain.dto.LostFoundReportResultDto;
 import com.studysync.domain.dto.LostItemDto;
+import com.studysync.domain.entity.UserAccount;
 import com.studysync.domain.service.LostFoundService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,8 +39,10 @@ public class LostFoundController {
     }
 
     @PostMapping
-    public LostFoundReportResultDto reportLostItem(@Valid @RequestBody LostFoundReportRequestDto body) {
-        return lostFoundService.reportLostItem(body.workspaceId(), body.description());
+    public LostFoundReportResultDto reportLostItem(
+            @Valid @RequestBody LostFoundReportRequestDto body,
+            @AuthenticationPrincipal UserAccount currentUser) {
+        return lostFoundService.reportLostItem(body.workspaceId(), body.description(), currentUser);
     }
 
     @PatchMapping("/{id}/found")

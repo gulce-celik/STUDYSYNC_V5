@@ -39,8 +39,8 @@ public class LostItemRecord {
     @Column(nullable = false, length = 2000)
     private String description;
 
-    @ManyToOne
-    @JoinColumn(name = "reported_by_user_id")
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "reported_by_user_id", nullable = false)
     private UserAccount reportedBy;
 
     @Column(nullable = false)

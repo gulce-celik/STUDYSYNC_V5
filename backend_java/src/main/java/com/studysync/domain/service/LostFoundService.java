@@ -43,9 +43,15 @@ public class LostFoundService {
     }
 
     @Transactional
-    public LostFoundReportResultDto reportLostItem(String workspaceId, String description) {
+    public LostFoundReportResultDto reportLostItem(
+            String workspaceId, String description, UserAccount authenticatedUser) {
         try {
-            UserAccount principal = SecurityUtils.requireCurrentUser();
+            UserAccount principal =
+                    authenticatedUser != null ? authenticatedUser : SecurityUtils.requireCurrentUser();
+            if (principal.getId() == null) {
+                return new LostFoundReportResultDto(
+                        false, "Authentication is missing. Please log in first.", null);
+            }
             UserAccount reporter = userAccountRepository.getReferenceById(principal.getId());
 
             LostItemRecord record = new LostItemRecord();

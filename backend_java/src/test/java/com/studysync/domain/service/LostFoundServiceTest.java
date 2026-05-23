@@ -81,7 +81,7 @@ class LostFoundServiceTest {
         persisted.setReportedBy(managed);
         when(lostItemRepository.saveAndFlush(org.mockito.ArgumentMatchers.any())).thenReturn(persisted);
 
-        var result = service.reportLostItem("desk-3", "Blue bottle");
+        var result = service.reportLostItem("desk-3", "Blue bottle", null);
 
         assertTrue(result.success());
         assertNotNull(result.item());
