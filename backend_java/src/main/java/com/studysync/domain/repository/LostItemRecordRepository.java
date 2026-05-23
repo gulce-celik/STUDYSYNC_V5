@@ -27,4 +27,7 @@ public interface LostItemRecordRepository extends JpaRepository<LostItemRecord, 
             "SELECT r FROM LostItemRecord r LEFT JOIN FETCH r.reportedBy "
                     + "WHERE r.status IN :statuses ORDER BY r.reportedAt DESC")
     List<LostItemRecord> findByStatusInOrderByReportedAtDesc(@Param("statuses") Collection<String> statuses);
+
+    @Query("SELECT r FROM LostItemRecord r LEFT JOIN FETCH r.reportedBy WHERE r.id = :id")
+    java.util.Optional<LostItemRecord> findByIdWithReporter(@Param("id") Long id);
 }

@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../../../core/config/app_config.dart';
 
 import '../../../shared/widgets/lost_map_badge.dart';
 import '../../reservation/data/reservation_mock_data.dart';
@@ -58,21 +61,28 @@ class _LostRow {
     return raw.toString().trim();
   }
 
+  static String? _readReporterId(Map<String, dynamic> m) {
+    final raw = m['reportedByUserId'] ?? m['reported_by_user_id'] ?? m['reportedBy'];
+    if (raw == null) return null;
+    if (raw is Map) return raw['id']?.toString();
+    return raw.toString();
+  }
+
   factory _LostRow.fromApi(Map<String, dynamic> m) {
-    final reported = m['reportedAt']?.toString() ?? '';
-    final serverExpires = m['expiresAt']?.toString();
-    final rt = DateTime.tryParse(reported) ?? DateTime.now();
+    final reported = m['reportedAt']?.toString() ?? m['reported_at']?.toString() ?? '';
+    final serverExpires = m['expiresAt']?.toString() ?? m['expires_at']?.toString();
+    final rt = DateTime.tryParse(reported.replaceFirst(' ', 'T')) ?? DateTime.now();
     final exp = (serverExpires != null && serverExpires.isNotEmpty)
         ? serverExpires
         : rt.add(const Duration(hours: 24)).toIso8601String();
     return _LostRow(
       id: _readId(m['id']),
-      workspaceId: m['workspaceId']?.toString() ?? '',
+      workspaceId: m['workspaceId']?.toString() ?? m['workspace_id']?.toString() ?? '',
       description: m['description']?.toString() ?? '',
       reportedAt: reported,
       expiresAt: exp,
       status: m['status']?.toString() ?? 'REPORTED',
-      reportedByUserId: m['reportedByUserId']?.toString(),
+      reportedByUserId: _readReporterId(m),
     );
   }
 }
@@ -106,6 +116,7 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
     });
     try {
       final raw = await _lostFoundApi.getLostItems();
+      _debugApi('GET /lost-found', '${raw.length} item(s)');
       final mapped = raw.map((e) => _LostRow.fromApi(Map<String, dynamic>.from(e))).toList();
       if (!mounted) return;
       setState(() {
@@ -114,14 +125,15 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
         _loadingList = false;
       });
     } on DioException catch (e) {
+      _debugApi('GET /lost-found failed', e.response?.data ?? e.message);
       if (!mounted) return;
       setState(() {
         _items = [];
-        _loadError = e.response?.data?['message']?.toString() ??
-            'Could not load reports (${e.response?.statusCode ?? 'offline'})';
+        _loadError = _dioErrorMessage(e, 'Could not load reports');
         _loadingList = false;
       });
-    } catch (_) {
+    } catch (e) {
+      _debugApi('GET /lost-found failed', e);
       if (!mounted) return;
       setState(() {
         _items = [];
@@ -137,6 +149,28 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
   }
 
   static bool _actionSuccess(dynamic value) => value == true || value == 'true';
+
+  static String _dioErrorMessage(DioException e, String fallback) {
+    final data = e.response?.data;
+    if (data is Map) {
+      final msg = data['message']?.toString();
+      if (msg != null && msg.isNotEmpty) return msg;
+      final err = data['error']?.toString();
+      if (err != null && err.isNotEmpty) return err;
+    }
+    final code = e.response?.statusCode;
+    if (code == 401 || code == 403) {
+      return 'Log in required (HTTP $code). API: ${AppConfig.baseUrl}';
+    }
+    if (code != null) return '$fallback (HTTP $code)';
+    return fallback;
+  }
+
+  void _debugApi(String label, Object? detail) {
+    if (kDebugMode) {
+      debugPrint('[LostFound] $label → $detail (API ${AppConfig.baseUrl})');
+    }
+  }
 
   String _timeRemaining(String expiresAt) {
     final now = DateTime.now();
@@ -155,6 +189,7 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
     }
     try {
       final res = await _lostFoundApi.markAsFound(row.id);
+      _debugApi('PATCH /lost-found/${row.id}/found', res);
       if (_actionSuccess(res['success'])) {
         if (!mounted) return;
         await _loadItems();
@@ -173,14 +208,13 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
         );
       }
     } on DioException catch (e) {
+      _debugApi('PATCH /lost-found/${row.id}/found failed', e.response?.data ?? e.message);
       if (!mounted) return;
-      final defaultSpringError = e.response?.data?['error']?.toString();
-      final message = e.response?.data?['message']?.toString();
-      final msg = message ?? defaultSpringError ?? 'PATCH /lost-found failed (Status: ${e.response?.statusCode})';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
+        SnackBar(content: Text(_dioErrorMessage(e, 'PATCH /lost-found failed'))),
       );
-    } catch (_) {
+    } catch (e) {
+      _debugApi('PATCH /lost-found/${row.id}/found failed', e);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to update status — check connection')),
@@ -250,6 +284,18 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                           );
                           return;
                         }
+                        final posted = res['item'];
+                        if (posted is Map) {
+                          final row = _LostRow.fromApi(Map<String, dynamic>.from(posted));
+                          _debugApi('POST /lost-found item', 'id=${row.id} reporter=${row.reportedByUserId}');
+                          if (row.id.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Report saved but server returned no id — pull to refresh'),
+                              ),
+                            );
+                          }
+                        }
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text(res['message']?.toString() ?? 'Item reported!')),
@@ -257,12 +303,10 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                         await _loadItems();
                         LostFoundMapSync.notifyChanged();
                       } on DioException catch (e) {
+                        _debugApi('POST /lost-found failed', e.response?.data ?? e.message);
                         if (!context.mounted) return;
-                        final msg = e.response?.data?['message']?.toString();
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(msg ?? 'POST /lost-found failed (${e.response?.statusCode})'),
-                          ),
+                          SnackBar(content: Text(_dioErrorMessage(e, 'POST /lost-found failed'))),
                         );
                       }
                     },

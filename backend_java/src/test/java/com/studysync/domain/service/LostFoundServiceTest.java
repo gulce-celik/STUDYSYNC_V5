@@ -74,12 +74,13 @@ class LostFoundServiceTest {
 
         UserAccount managed = new UserAccount();
         setEntityId(managed, 9L);
-        when(userAccountRepository.getReferenceById(9L)).thenReturn(managed);
+        when(userAccountRepository.findById(9L)).thenReturn(Optional.of(managed));
 
         LostItemRecord persisted = reportedItem("desk-3", NOW);
         setRecordId(persisted, 42L);
         persisted.setReportedBy(managed);
         when(lostItemRepository.saveAndFlush(org.mockito.ArgumentMatchers.any())).thenReturn(persisted);
+        when(lostItemRepository.findByIdWithReporter(42L)).thenReturn(Optional.of(persisted));
 
         var result = service.reportLostItem("desk-3", "Blue bottle", null);
 
@@ -96,6 +97,7 @@ class LostFoundServiceTest {
     @Test
     void markAsFound_rejectsNonNumericId() {
         UserAccount reporter = reporter(7L);
+        when(userAccountRepository.findById(7L)).thenReturn(Optional.of(reporter));
         var result = service.markAsFound("lost-1", reporter);
 
         assertFalse(result.success());
@@ -105,10 +107,11 @@ class LostFoundServiceTest {
     @Test
     void markAsFound_rejectsExpiredReport() {
         UserAccount reporter = reporter(7L);
+        when(userAccountRepository.findById(7L)).thenReturn(Optional.of(reporter));
         LostItemRecord record = reportedItem("desk-5", NOW.minus(25, ChronoUnit.HOURS));
         setRecordId(record, 5L);
         record.setReportedBy(reporter);
-        when(lostItemRepository.findById(5L)).thenReturn(Optional.of(record));
+        when(lostItemRepository.findByIdWithReporter(5L)).thenReturn(Optional.of(record));
 
         var result = service.markAsFound("5", reporter);
 
@@ -119,10 +122,11 @@ class LostFoundServiceTest {
     @Test
     void markAsFound_allowsAnyAuthenticatedUser() {
         UserAccount finder = reporter(8L);
+        when(userAccountRepository.findById(8L)).thenReturn(Optional.of(finder));
         LostItemRecord record = reportedItem("desk-6", NOW.minus(1, ChronoUnit.HOURS));
         setRecordId(record, 6L);
         record.setReportedBy(reporter(7L));
-        when(lostItemRepository.findById(6L)).thenReturn(Optional.of(record));
+        when(lostItemRepository.findByIdWithReporter(6L)).thenReturn(Optional.of(record));
 
         var result = service.markAsFound("6", finder);
 
