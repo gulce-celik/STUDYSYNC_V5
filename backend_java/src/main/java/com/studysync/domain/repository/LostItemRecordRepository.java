@@ -17,4 +17,6 @@ public interface LostItemRecordRepository extends JpaRepository<LostItemRecord, 
     // Antigravity Modification: Renamed derived query to match the entity property
     // 'reportedBy'
     List<LostItemRecord> findByReportedBy_IdOrderByReportedAtDesc(Long userId);
+
+    List<LostItemRecord> findByStatusOrderByReportedAtDesc(String status);
 }

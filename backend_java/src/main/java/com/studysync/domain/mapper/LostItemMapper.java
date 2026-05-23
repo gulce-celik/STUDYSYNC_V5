@@ -4,10 +4,11 @@ package com.studysync.domain.mapper;
 
 import com.studysync.domain.dto.LostItemDto;
 import com.studysync.domain.entity.LostItemRecord;
+import com.studysync.domain.policy.LostFoundPolicy;
 import java.time.format.DateTimeFormatter;
 
 /**
- * {@link LostItemRecord} → {@link LostItemDto}; {@code reportedAt} ISO-8601 string (Flutter parse).
+ * {@link LostItemRecord} → {@link LostItemDto}; {@code reportedAt} / {@code expiresAt} ISO-8601 (Flutter parse).
  */
 public final class LostItemMapper {
 
@@ -19,14 +20,17 @@ public final class LostItemMapper {
         if (r == null) {
             return null;
         }
-        final String at = r.getReportedAt() != null ? ISO.format(r.getReportedAt()) : "";
+        final String reportedAt = r.getReportedAt() != null ? ISO.format(r.getReportedAt()) : "";
+        final String expiresAt = r.getReportedAt() != null
+                ? ISO.format(LostFoundPolicy.expiresAt(r.getReportedAt()))
+                : "";
         return new LostItemDto(
-            String.valueOf(r.getId()), 
-            r.getWorkspaceId(), 
-            r.getDescription(), 
-            at,
-            r.getCategory() != null ? r.getCategory() : "GENERAL",
-            r.getStatus() != null ? r.getStatus() : "REPORTED"
-        );
+                String.valueOf(r.getId()),
+                r.getWorkspaceId(),
+                r.getDescription(),
+                reportedAt,
+                expiresAt,
+                r.getCategory() != null ? r.getCategory() : "GENERAL",
+                r.getStatus() != null ? r.getStatus() : LostFoundPolicy.STATUS_REPORTED);
     }
 }

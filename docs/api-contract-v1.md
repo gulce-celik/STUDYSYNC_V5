@@ -87,13 +87,20 @@ default is `http://localhost:8080/api/v1` on iOS simulator / desktop; on **Andro
 ## Lost & Found
 
 - `GET /lost-found`
-  - response: `LostItem[]`
+  - response: `LostItem[]` (active `REPORTED` only, within 24h)
 
 - `POST /lost-found`
   - request:
     - `workspaceId` (string)
     - `description` (string)
   - response: `ActionResult`
+  - `reportedBy` set server-side from JWT
+
+- `PATCH /lost-found/{id}/found`
+  - response: `ActionResult`
+
+- `LostItem`:
+  - `id`, `workspaceId`, `description`, `reportedAt`, `expiresAt` (ISO-8601), `category`, `status`
 
 ## Weekly schedule (busy hours)
 

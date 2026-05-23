@@ -39,8 +39,11 @@ class _LostRow {
 
   factory _LostRow.fromApi(Map<String, dynamic> m) {
     final reported = m['reportedAt']?.toString() ?? '';
+    final serverExpires = m['expiresAt']?.toString();
     final rt = DateTime.tryParse(reported) ?? DateTime.now();
-    final exp = rt.add(const Duration(hours: 24)).toIso8601String();
+    final exp = (serverExpires != null && serverExpires.isNotEmpty)
+        ? serverExpires
+        : rt.add(const Duration(hours: 24)).toIso8601String();
     return _LostRow(
       id: m['id']?.toString() ?? '',
       workspaceId: m['workspaceId']?.toString() ?? '',
