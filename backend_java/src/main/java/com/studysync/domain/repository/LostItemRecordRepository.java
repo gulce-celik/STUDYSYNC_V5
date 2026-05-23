@@ -3,6 +3,7 @@
 package com.studysync.domain.repository;
 
 import com.studysync.domain.entity.LostItemRecord;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -19,4 +20,6 @@ public interface LostItemRecordRepository extends JpaRepository<LostItemRecord, 
     List<LostItemRecord> findByReportedBy_IdOrderByReportedAtDesc(Long userId);
 
     List<LostItemRecord> findByStatusOrderByReportedAtDesc(String status);
+
+    List<LostItemRecord> findByStatusInOrderByReportedAtDesc(Collection<String> statuses);
 }

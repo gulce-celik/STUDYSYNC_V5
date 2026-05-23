@@ -10,5 +10,6 @@ public record LostItemDto(
         String reportedAt,
         String expiresAt,
         String category,
-        String status
+        String status,
+        String reportedByUserId
 ) {}

@@ -93,14 +93,13 @@ default is `http://localhost:8080/api/v1` on iOS simulator / desktop; on **Andro
   - request:
     - `workspaceId` (string)
     - `description` (string)
-  - response: `ActionResult`
-  - `reportedBy` set server-side from JWT
+  - response: `{ success, message, item?: LostItem }` — `reportedBy` set server-side from JWT
 
 - `PATCH /lost-found/{id}/found`
   - response: `ActionResult`
 
 - `LostItem`:
-  - `id`, `workspaceId`, `description`, `reportedAt`, `expiresAt` (ISO-8601), `category`, `status`
+  - `id`, `workspaceId`, `description`, `reportedAt`, `expiresAt` (ISO-8601), `category`, `status`, `reportedByUserId`
 
 ## Weekly schedule (busy hours)
 

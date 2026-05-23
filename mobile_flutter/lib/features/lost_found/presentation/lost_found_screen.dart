@@ -26,6 +26,9 @@ class _LostRow {
 
   bool get isFound => status.toUpperCase() == 'FOUND';
 
+  /// Server rows use numeric ids; offline sample rows use `lost-1` etc.
+  bool get hasServerId => int.tryParse(id) != null;
+
   _LostRow copyWith({String? status}) {
     return _LostRow(
       id: id,
@@ -37,6 +40,13 @@ class _LostRow {
     );
   }
 
+  static String _readId(dynamic raw) {
+    if (raw == null) return '';
+    if (raw is int) return raw.toString();
+    if (raw is num) return raw.toInt().toString();
+    return raw.toString().trim();
+  }
+
   factory _LostRow.fromApi(Map<String, dynamic> m) {
     final reported = m['reportedAt']?.toString() ?? '';
     final serverExpires = m['expiresAt']?.toString();
@@ -45,7 +55,7 @@ class _LostRow {
         ? serverExpires
         : rt.add(const Duration(hours: 24)).toIso8601String();
     return _LostRow(
-      id: m['id']?.toString() ?? '',
+      id: _readId(m['id']),
       workspaceId: m['workspaceId']?.toString() ?? '',
       description: m['description']?.toString() ?? '',
       reportedAt: reported,
@@ -68,26 +78,7 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
   late List<_LostRow> _items;
   final _lostFoundApi = LostFoundApi();
   bool _loadingList = true;
-  bool _listFromFallback = false;
-
-  static const List<_LostRow> _mockRows = [
-    _LostRow(
-      id: 'lost-1',
-      workspaceId: 'desk-8',
-      description: 'Black phone charger (USB-C)',
-      reportedAt: '2026-03-10T14:30:00',
-      expiresAt: '2026-03-11T14:30:00',
-      status: 'REPORTED',
-    ),
-    _LostRow(
-      id: 'lost-2',
-      workspaceId: 'group-2',
-      description: 'Blue notebook - Algorithms notes',
-      reportedAt: '2026-03-10T11:00:00',
-      expiresAt: '2026-03-11T11:00:00',
-      status: 'REPORTED',
-    ),
-  ];
+  String? _loadError;
 
   @override
   void initState() {
@@ -99,7 +90,7 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
   Future<void> _loadItems() async {
     setState(() {
       _loadingList = true;
-      _listFromFallback = false;
+      _loadError = null;
     });
     try {
       final raw = await _lostFoundApi.getLostItems();
@@ -107,28 +98,29 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
       if (!mounted) return;
       setState(() {
         _items = mapped;
-        _listFromFallback = false;
+        _loadError = null;
         _loadingList = false;
       });
-    } on DioException {
+    } on DioException catch (e) {
       if (!mounted) return;
       setState(() {
-        _items = List.of(_mockRows);
-        _listFromFallback = true;
+        _items = [];
+        _loadError = e.response?.data?['message']?.toString() ??
+            'Could not load reports (${e.response?.statusCode ?? 'offline'})';
         _loadingList = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _items = List.of(_mockRows);
-        _listFromFallback = true;
+        _items = [];
+        _loadError = 'Could not load reports — check connection';
         _loadingList = false;
       });
     }
   }
 
   bool _hasLost(String workspaceId) {
-    if (_listFromFallback) return false;
+    if (_loadError != null) return false;
     return _items.any((e) => e.workspaceId == workspaceId && !e.isFound);
   }
 
@@ -141,6 +133,12 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
   }
 
   void _markFound(_LostRow row) async {
+    if (!row.hasServerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Refresh the list — this row is not from the server')),
+      );
+      return;
+    }
     try {
       final res = await _lostFoundApi.markAsFound(row.id);
       if (res['success'] == true) {
@@ -227,19 +225,41 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                         return;
                       }
                       try {
-                        await LostFoundApi().reportLostItem(
+                        final res = await _lostFoundApi.reportLostItem(
                           workspaceId: workspace,
                           description: descCtrl.text.trim(),
                         );
                         if (!context.mounted) return;
+                        if (res['success'] != true) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(res['message']?.toString() ?? 'Report failed — log in and try again'),
+                            ),
+                          );
+                          return;
+                        }
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item reported!')));
-                        await _loadItems();
-                        LostFoundMapSync.notifyChanged();
-                      } on DioException {
-                        if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('POST /lost-found failed — check backend')),
+                          SnackBar(content: Text(res['message']?.toString() ?? 'Item reported!')),
+                        );
+                        final item = res['item'];
+                        if (item is Map) {
+                          final row = _LostRow.fromApi(Map<String, dynamic>.from(item));
+                          setState(() {
+                            _items = [row, ..._items.where((e) => e.id != row.id)];
+                            _loadError = null;
+                          });
+                        } else {
+                          await _loadItems();
+                        }
+                        LostFoundMapSync.notifyChanged();
+                      } on DioException catch (e) {
+                        if (!context.mounted) return;
+                        final msg = e.response?.data?['message']?.toString();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(msg ?? 'POST /lost-found failed (${e.response?.statusCode})'),
+                          ),
                         );
                       }
                     },
@@ -486,8 +506,8 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          _listFromFallback
-                              ? 'Map preview — no server data'
+                          _loadError != null
+                              ? 'Map preview — list could not load from server'
                               : 'Yellow markers = items reported via this app (same as Reserve map)',
                           style: const TextStyle(fontSize: 10, height: 1.3, color: Color(0xFF6B7280)),
                         ),
@@ -503,8 +523,8 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                     const Expanded(
                       child: Text('Recent reports', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                     ),
-                    if (_listFromFallback)
-                      const Text('Sample only — offline', style: TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))),
+                    if (_loadError != null)
+                      Text(_loadError!, style: const TextStyle(fontSize: 10, color: Color(0xFFDC2626))),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -543,7 +563,7 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                       trailing: e.isFound
                           ? null
                           : TextButton(
-                              onPressed: () => _markFound(e),
+                              onPressed: e.hasServerId ? () => _markFound(e) : null,
                               child: const Text('Found', style: TextStyle(fontWeight: FontWeight.w800)),
                             ),
                     ),

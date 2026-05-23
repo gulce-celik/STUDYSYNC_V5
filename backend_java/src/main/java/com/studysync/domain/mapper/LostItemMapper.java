@@ -24,6 +24,9 @@ public final class LostItemMapper {
         final String expiresAt = r.getReportedAt() != null
                 ? ISO.format(LostFoundPolicy.expiresAt(r.getReportedAt()))
                 : "";
+        final String reporterId = r.getReportedBy() != null && r.getReportedBy().getId() != null
+                ? String.valueOf(r.getReportedBy().getId())
+                : null;
         return new LostItemDto(
                 String.valueOf(r.getId()),
                 r.getWorkspaceId(),
@@ -31,6 +34,7 @@ public final class LostItemMapper {
                 reportedAt,
                 expiresAt,
                 r.getCategory() != null ? r.getCategory() : "GENERAL",
-                r.getStatus() != null ? r.getStatus() : LostFoundPolicy.STATUS_REPORTED);
+                r.getStatus() != null ? r.getStatus() : LostFoundPolicy.STATUS_REPORTED,
+                reporterId);
     }
 }
