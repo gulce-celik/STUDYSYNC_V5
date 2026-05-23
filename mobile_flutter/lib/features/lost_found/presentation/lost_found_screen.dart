@@ -124,6 +124,8 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
     return _items.any((e) => e.workspaceId == workspaceId && !e.isFound);
   }
 
+  static bool _actionSuccess(dynamic value) => value == true || value == 'true';
+
   String _timeRemaining(String expiresAt) {
     final now = DateTime.now();
     final expires = DateTime.tryParse(expiresAt.replaceFirst(' ', 'T'));
@@ -141,11 +143,9 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
     }
     try {
       final res = await _lostFoundApi.markAsFound(row.id);
-      if (res['success'] == true) {
+      if (_actionSuccess(res['success'])) {
         if (!mounted) return;
-        setState(() {
-          _items = _items.map((e) => e.id == row.id ? e.copyWith(status: 'FOUND') : e).toList();
-        });
+        await _loadItems();
         LostFoundMapSync.notifyChanged();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -230,7 +230,7 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                           description: descCtrl.text.trim(),
                         );
                         if (!context.mounted) return;
-                        if (res['success'] != true) {
+                        if (!_actionSuccess(res['success'])) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(res['message']?.toString() ?? 'Report failed — log in and try again'),

@@ -57,7 +57,7 @@ public class LostFoundService {
             record.setStatus(LostFoundPolicy.STATUS_REPORTED);
 
             LostItemRecord saved = lostItemRepository.saveAndFlush(record);
-            LostItemDto item = LostItemMapper.toDto(saved);
+            LostItemDto item = LostItemMapper.toDto(saved, principal.getId());
             return new LostFoundReportResultDto(
                     true, "Item reported successfully at " + workspaceId, item);
         } catch (IllegalStateException ex) {

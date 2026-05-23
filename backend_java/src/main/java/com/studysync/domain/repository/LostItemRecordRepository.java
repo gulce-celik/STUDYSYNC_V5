@@ -6,6 +6,8 @@ import com.studysync.domain.entity.LostItemRecord;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Kayıp eşya kayıtları — Profile “Lost items” listesi.
@@ -21,5 +23,8 @@ public interface LostItemRecordRepository extends JpaRepository<LostItemRecord, 
 
     List<LostItemRecord> findByStatusOrderByReportedAtDesc(String status);
 
-    List<LostItemRecord> findByStatusInOrderByReportedAtDesc(Collection<String> statuses);
+    @Query(
+            "SELECT r FROM LostItemRecord r LEFT JOIN FETCH r.reportedBy "
+                    + "WHERE r.status IN :statuses ORDER BY r.reportedAt DESC")
+    List<LostItemRecord> findByStatusInOrderByReportedAtDesc(@Param("statuses") Collection<String> statuses);
 }

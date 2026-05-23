@@ -102,9 +102,9 @@ Active reports only on `GET /lost-found`; 24h visibility; `reportedBy` from JWT 
 | `PATCH /{id}/found` | `FOUND` (rejects expired / already found) |
 | After 24h | `ExpireLostItemsJob` → `EXPIRED` (hidden from GET + map) |
 
-**Backend:** `LostFoundPolicy`, `LostFoundService`, `LostItemMapper`, `ExpireLostItemsJob`, `LostFoundController` (`@AuthenticationPrincipal` on POST).
+**Backend:** `LostFoundPolicy`, `LostFoundService`, `SecurityUtils`, `LostItemMapper`, `ExpireLostItemsJob`; POST returns `{ success, message, item }`; `reportedBy` via `getReferenceById`.
 
-**Flutter:** `LostFoundApi.markAsFound` (already wired); list uses server `expiresAt` when present.
+**Flutter:** no mock fallback ids; **Found** needs numeric server id; POST checks `success`; list reloads after **Found**.
 
 **Verify:** report item → appears in list + map; **Found** → disappears on refresh; wait 24h (or unit test) → `EXPIRED`.
 

@@ -17,6 +17,10 @@ public final class LostItemMapper {
     private LostItemMapper() {}
 
     public static LostItemDto toDto(LostItemRecord r) {
+        return toDto(r, null);
+    }
+
+    public static LostItemDto toDto(LostItemRecord r, Long reporterUserId) {
         if (r == null) {
             return null;
         }
@@ -24,11 +28,13 @@ public final class LostItemMapper {
         final String expiresAt = r.getReportedAt() != null
                 ? ISO.format(LostFoundPolicy.expiresAt(r.getReportedAt()))
                 : "";
-        final String reporterId = r.getReportedBy() != null && r.getReportedBy().getId() != null
-                ? String.valueOf(r.getReportedBy().getId())
-                : null;
+        final String reporterId = reporterUserId != null
+                ? String.valueOf(reporterUserId)
+                : r.getReportedBy() != null && r.getReportedBy().getId() != null
+                        ? String.valueOf(r.getReportedBy().getId())
+                        : null;
         return new LostItemDto(
-                String.valueOf(r.getId()),
+                r.getId() != null ? String.valueOf(r.getId()) : "",
                 r.getWorkspaceId(),
                 r.getDescription(),
                 reportedAt,

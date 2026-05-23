@@ -73,10 +73,12 @@ class LostFoundServiceTest {
         setPrincipalId(principal, 9L);
 
         UserAccount managed = new UserAccount();
+        setEntityId(managed, 9L);
         when(userAccountRepository.getReferenceById(9L)).thenReturn(managed);
 
         LostItemRecord persisted = reportedItem("desk-3", NOW);
         setRecordId(persisted, 42L);
+        persisted.setReportedBy(managed);
         when(lostItemRepository.saveAndFlush(org.mockito.ArgumentMatchers.any())).thenReturn(persisted);
 
         var result = service.reportLostItem("desk-3", "Blue bottle");
@@ -84,6 +86,7 @@ class LostFoundServiceTest {
         assertTrue(result.success());
         assertNotNull(result.item());
         assertEquals("42", result.item().id());
+        assertEquals("9", result.item().reportedByUserId());
 
         ArgumentCaptor<LostItemRecord> captor = ArgumentCaptor.forClass(LostItemRecord.class);
         verify(lostItemRepository).saveAndFlush(captor.capture());
@@ -150,10 +153,14 @@ class LostFoundServiceTest {
     }
 
     private static void setRecordId(LostItemRecord record, long id) {
+        setEntityId(record, id);
+    }
+
+    private static void setEntityId(Object entity, long id) {
         try {
-            var field = LostItemRecord.class.getDeclaredField("id");
+            var field = entity.getClass().getDeclaredField("id");
             field.setAccessible(true);
-            field.set(record, id);
+            field.set(entity, id);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
