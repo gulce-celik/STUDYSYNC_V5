@@ -17,7 +17,7 @@
 - [ ] **Password Change:** Password change process works, but the error screen continues to show in the background.
 - [X] **Course Edit:** The course edit function is not working.
 - [X] **Check-in System:** **Partial → largely done (2026-05-22).** QR verify + 15‑min window (mobile + backend, Istanbul TZ). No-show job marks `NO_SHOW` and −10 after window. See work log **2026-05-22**.
-- [ ] **Email Verification/Delivery:** Emails containing verification/password codes are not being delivered.
+- [X] **Email Verification/Delivery:** Emails containing verification/password codes are now successfully delivered using Brevo HTTP API (bypassing Render SMTP blocks).
 - [ ] **Duplicate Email Registration:** The check for accounts with the same email is done too late. (Should be validated earlier / on the frontend).
 
 ## 🚀 New Features & Enhancements
@@ -75,6 +75,19 @@
 #### Still open (unchanged)
 
 - Admin APIs, notifications API, email/OTP, forgot-password backend, buddy matching, etc. — see tables below.
+
+------------------------------------------------------------------------------
+
+### 2026-05-25 (Brevo API Integration & Live Testing)
+
+**Backend (`backend_java/`) & Infrastructure**
+- **Email Delivery (Brevo HTTP API):** Replaced Spring's default `JavaMailSender` (SMTP port 587) with Java's native `HttpClient` pointing to Brevo's REST API (`https://api.brevo.com/v3/smtp/email`). This was done to completely bypass Render's strict block on SMTP ports for free-tier accounts.
+- **Environment Variables:** The Brevo API key is now injected via `@Value("${brevo.api.key}")` and configured securely as a Render Environment Variable (`BREVO_API_KEY`) to prevent secrets in version control.
+- **Verification Flow:** End-to-end testing confirms that emails are now sent instantly, allowing successful verification and registration.
+
+**Database & Admin Notes (Neon.tech)**
+- `user_accounts` table is fully live. Manual deletions require dropping dependent constraints first (e.g. `DELETE FROM user_enrolled_courses WHERE user_id = X`).
+- Backend roles are currently limited to `ROLE_USER`. Any admin functionalities demonstrated in the Flutter app remain strictly mocked on the frontend for presentation purposes until dedicated `ROLE_ADMIN` routes are implemented.
 
 ------------------------------------------------------------------------------
 
