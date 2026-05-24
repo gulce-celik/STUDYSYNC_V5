@@ -147,7 +147,7 @@ Tracked from [HANDOFF.md](../HANDOFF.md) (2026-05-22). Mobile-only work is omitt
 | [ ] | `GET /auth/check-email` | Early duplicate-email check on register (409 is too late) |
 | [ ] | Email / OTP delivery | Verification and password-reset codes not reaching inboxes |
 | [ ] | Refresh token store | Production auth parity (beyond stateless JWT) |
-| [ ] | KVKK consent field | Persist approval on register / reservation (mobile checkbox is front-only) |
+| [x] | KVKK consent field | Persist approval on register / reservation (mobile checkbox is front-only) |
 | [ ] | `PUT /auth/me/courses` wiring | Endpoint may exist — ensure profile course edit persists from mobile |
 
 ### Reservations & check-in
@@ -224,3 +224,4 @@ cd backend_java && mvn test
 | 2026-05-22 | Backend TODO section — from HANDOFF (auth, admin, notifications, L&F, buddy) |
 | 2026-05-23 | Lost & Found — `reportedBy`, active GET + `expiresAt`, `ExpireLostItemsJob`, mobile `expiresAt` |
 | 2026-05-23 | Lost & Found — §4 **Known bugs**: Found *not found*, `reportedByUserId` missing, Render/deploy checklist |
+| 2026-05-24 | KVKK consent persistence — backend entity/DTO validation + Flutter API and session persistence |

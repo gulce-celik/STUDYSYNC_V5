@@ -13,6 +13,7 @@ class AuthSession {
   int? userYear;
   int? userScore;
   List<String> enrolledCourseCodes = [];
+  bool userKvkkAccepted = false;
   bool isAdmin = false;
 
   void clear() {
@@ -26,6 +27,7 @@ class AuthSession {
     userYear = null;
     userScore = null;
     enrolledCourseCodes = [];
+    userKvkkAccepted = false;
     isAdmin = false;
   }
 }
