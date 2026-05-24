@@ -17,4 +17,5 @@ public record UserSummaryDto(
         String department,
         Integer year,
         Integer responsibilityScore,
-        List<String> enrolledCourses) {}
+        List<String> enrolledCourses,
+        Boolean kvkkAccepted) {}

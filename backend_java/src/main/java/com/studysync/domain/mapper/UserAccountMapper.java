@@ -27,6 +27,7 @@ public final class UserAccountMapper {
                 departmentDisplayName != null ? departmentDisplayName : u.getDepartmentId(),
                 u.getYear(),
                 u.getResponsibilityScore(),
-                u.getEnrolledCourses());
+                u.getEnrolledCourses(),
+                u.isKvkkAccepted());
     }
 }

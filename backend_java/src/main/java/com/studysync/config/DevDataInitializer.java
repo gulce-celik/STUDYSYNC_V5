@@ -149,7 +149,7 @@ public class DevDataInitializer {
                 c20.setRatingCount(100);
 
                 CourseCatalogEntity c21 = new CourseCatalogEntity();
-                c21.setCode("ES224");
+                c21.setCode("CSE341");
                 c21.setName("File Organization");
                 c21.setDifficultyRating(4.0);
                 c21.setRatingCount(100);
@@ -234,6 +234,7 @@ public class DevDataInitializer {
                 alice.setDepartmentId("cse");
                 alice.setYear(3);
                 alice.setResponsibilityScore(95);
+                alice.setKvkkAccepted(true);
                 alice.setEnrolledCourses(new java.util.ArrayList<>(List.of("CSE344", "CSE331", "CSE312", "MATH301")));
 
                 UserAccount bob = new UserAccount();
@@ -244,6 +245,7 @@ public class DevDataInitializer {
                 bob.setDepartmentId("ie");
                 bob.setYear(2);
                 bob.setResponsibilityScore(88);
+                bob.setKvkkAccepted(true);
                 bob.setEnrolledCourses(new java.util.ArrayList<>(List.of("GBE113", "MATH131", "PHYS101")));
 
                 UserAccount charlie = new UserAccount();
@@ -254,6 +256,7 @@ public class DevDataInitializer {
                 charlie.setDepartmentId("math");
                 charlie.setYear(4);
                 charlie.setResponsibilityScore(72);
+                charlie.setKvkkAccepted(true);
                 charlie.setEnrolledCourses(new java.util.ArrayList<>(List.of("MATH221", "MATH241", "MATH281")));
 
                 userRepository.saveAll(List.of(alice, bob, charlie));

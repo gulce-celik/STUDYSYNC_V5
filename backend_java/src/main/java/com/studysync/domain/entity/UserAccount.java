@@ -68,8 +68,19 @@ public class UserAccount implements UserDetails {
     @Column(name = "course_code")
     private List<String> enrolledCourses = new ArrayList<>();
 
+    @Column(name = "kvkk_accepted", nullable = false, columnDefinition = "boolean default false")
+    private boolean kvkkAccepted = false;
+
     // Antigravity Modification: Changed constructor from protected to public to fix compilation visibility errors
     public UserAccount() {}
+
+    public boolean isKvkkAccepted() {
+        return kvkkAccepted;
+    }
+
+    public void setKvkkAccepted(boolean kvkkAccepted) {
+        this.kvkkAccepted = kvkkAccepted;
+    }
 
     public Long getId() {
         return id;

@@ -49,7 +49,7 @@ class AuthApi {
   }
 
   /// [POST /auth/register] — gövde:
-  /// `email`, `password`, `name`, `nickname`, `departmentId`, `year`, `selectedCourseCodes`
+  /// `email`, `password`, `name`, `nickname`, `departmentId`, `year`, `selectedCourseCodes`, `kvkkAccepted`
   /// ve yanıtta login ile aynı token yapısı beklenir.
   Future<LoginResult> register({
     required String email,
@@ -59,6 +59,7 @@ class AuthApi {
     required String departmentId,
     required int year,
     required List<String> selectedCourseCodes,
+    required bool kvkkAccepted,
   }) async {
     final response = await ApiClient.instance.dio.post<Map<String, dynamic>>(
       '/auth/register',
@@ -70,6 +71,7 @@ class AuthApi {
         'departmentId': departmentId,
         'year': year,
         'selectedCourseCodes': selectedCourseCodes,
+        'kvkkAccepted': kvkkAccepted,
       },
     );
     final m = response.data ?? {};

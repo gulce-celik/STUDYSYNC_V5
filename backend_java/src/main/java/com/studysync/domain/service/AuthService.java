@@ -76,7 +76,8 @@ public class AuthService {
                 deptName,
                 userAccount.getYear(),
                 userAccount.getResponsibilityScore(),
-                userAccount.getEnrolledCourses());
+                userAccount.getEnrolledCourses(),
+                userAccount.isKvkkAccepted());
 
         return new LoginResponseDto(accessToken, refreshToken, summary);
     }
@@ -109,6 +110,7 @@ public class AuthService {
         u.setDepartmentId(request.departmentId());
         u.setYear(request.year());
         u.setResponsibilityScore(75);
+        u.setKvkkAccepted(request.kvkkAccepted());
         if (request.selectedCourseCodes() != null) {
             u.setEnrolledCourses(new java.util.ArrayList<>(request.selectedCourseCodes()));
         }
@@ -124,7 +126,8 @@ public class AuthService {
                 deptName,
                 u.getYear(),
                 u.getResponsibilityScore(),
-                u.getEnrolledCourses());
+                u.getEnrolledCourses(),
+                u.isKvkkAccepted());
 
         String accessToken = jwtTokenProvider.createAccessTokenForUserId(u.getId());
         String refreshToken = jwtTokenProvider.createRefreshTokenValue();
@@ -150,7 +153,8 @@ public class AuthService {
                 deptName,
                 currentUser.getYear(),
                 currentUser.getResponsibilityScore(),
-                currentUser.getEnrolledCourses());
+                currentUser.getEnrolledCourses(),
+                currentUser.isKvkkAccepted());
     }
 
     @Transactional

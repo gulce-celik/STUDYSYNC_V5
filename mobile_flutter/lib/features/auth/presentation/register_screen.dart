@@ -224,6 +224,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         departmentId: _selectedDepartmentId,
         year: _selectedYear!,
         selectedCourseCodes: _selectedCourseCodes.toList(growable: false),
+        kvkkAccepted: _kvkkAccepted,
       );
       if (!mounted) return;
       AuthScope.of(context).establishSession(

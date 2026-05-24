@@ -81,6 +81,7 @@ class AuthController extends ChangeNotifier {
     if (courses is List) {
       session.enrolledCourseCodes = courses.map((e) => e.toString()).toList();
     }
+    session.userKvkkAccepted = user['kvkkAccepted'] == true;
   }
 
   void logout() {
