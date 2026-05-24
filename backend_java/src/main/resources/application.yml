@@ -22,6 +22,10 @@ app:
   jwtSecret: ${JWT_SECRET:ThisIsAVeryLongSecretForTestingPurposesStudySync123!}
   jwtExpirationMs: ${JWT_EXPIRATION_MS:86400000}
 
+brevo:
+  api:
+    key: ${BREVO_API_KEY:}
+
 ---
 # ==================== DEV PROFİLİ (H2 In-Memory) ====================
 # Yerel geliştirme için. Uygulama her başlatıldığında veriler sıfırlanır.
