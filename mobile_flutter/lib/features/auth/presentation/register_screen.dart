@@ -133,7 +133,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  void _sendCode() {
+  Future<void> _sendCode() async {
     final email = _normalizeEmail(_email.text);
     setState(() => _emailError = null);
     if (_firstName.text.trim().isEmpty || _lastName.text.trim().isEmpty) {
@@ -149,32 +149,56 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _toast('Password must be at least 6 characters.');
       return;
     }
-    _sentCode = (100000 + Random().nextInt(900000)).toString();
-    if (!kReleaseMode) {
-      _toast('Demo code (no email sent): $_sentCode');
-    } else {
-      _toast('Verification code sent.');
+    
+    setState(() => _loading = true);
+    try {
+      final nickname = _buildNickname(_firstName.text, _lastName.text);
+      await AuthApi().registerInit(
+        email: email,
+        password: _password.text,
+        name: '${_firstName.text.trim()} ${_lastName.text.trim()}'.trim(),
+        nickname: nickname,
+      );
+      if (!mounted) return;
+      _toast('Verification code sent to $email.');
+      setState(() => _step = 2);
+      _requestVerifyFieldAndKeyboard();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final status = e.response?.statusCode;
+      if (status == 409) {
+        setState(() => _emailError = 'This email is already registered.');
+        _toast('Email already registered.');
+      } else {
+        _toast('Could not send code. ${e.response?.data?['message'] ?? ''}');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    setState(() => _step = 2);
-    _requestVerifyFieldAndKeyboard();
   }
 
-  void _verifyCode() {
+  Future<void> _verifyCode() async {
     final v = _verificationCode.text.trim();
-    if (_sentCode.isEmpty) {
-      _toast('Please send the code first.');
-      return;
-    }
     if (v.length != 6) {
       _toast('Enter a 6-digit code.');
       return;
     }
-    if (v != _sentCode) {
-      _toast('Code does not match.');
-      return;
+    
+    setState(() => _loading = true);
+    try {
+      await AuthApi().verifyOtp(
+        email: _normalizeEmail(_email.text),
+        otpCode: v,
+      );
+      if (!mounted) return;
+      _toast('Email verified.');
+      setState(() => _step = 3);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      _toast('Verification failed: ${e.response?.data?['message'] ?? 'Invalid code'}');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    _toast('Email verified.');
-    setState(() => _step = 3);
   }
 
   void _showKvkkNotice() {
@@ -216,7 +240,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final nickname = _buildNickname(_firstName.text, _lastName.text);
     setState(() => _loading = true);
     try {
-      final r = await AuthApi().register(// API call to register
+      final r = await AuthApi().registerComplete(// API call to register
         email: email,
         password: password,
         name: fullName,
@@ -495,9 +519,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         const SizedBox(height: 6),
         FilledButton(
-          onPressed: _sendCode,
+          onPressed: _loading ? null : _sendCode,
           style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2563EB), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-          child: const Text('Send Verification Code', style: TextStyle(fontWeight: FontWeight.w800)),
+          child: _loading 
+            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
+            : const Text('Send Verification Code', style: TextStyle(fontWeight: FontWeight.w800)),
         ),
       ],
     );
@@ -514,27 +540,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFBFDBFE))),
           child: Text(
-            !kReleaseMode
-                ? 'Demo mode: this build does not send real e-mail. Generated code is shown below for $email.'
-                : 'We sent a 6-digit code to $email',
+            'We sent a 6-digit code to $email',
             style: const TextStyle(fontSize: 11, color: Color(0xFF1E40AF), height: 1.35),
           ),
         ),
-        if (!kReleaseMode) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F3FF),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFDDD6FE)),
-            ),
-            child: Text(
-              'Demo verification code: $_sentCode',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF5B21B6)),
-            ),
-          ),
-        ],
         const SizedBox(height: 12),
         TextField(
           focusNode: _verifyFocus,
@@ -555,21 +564,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
         TextButton(
-          onPressed: () {
-            setState(() => _sentCode = (100000 + Random().nextInt(900000)).toString());
-            if (!kReleaseMode) {
-              _toast('New demo code (no email sent): $_sentCode');
-            } else {
-              _toast('Code refreshed.');
-            }
-          },
+          onPressed: _loading ? null : _sendCode,
           child: const Text('Resend code', style: TextStyle(fontWeight: FontWeight.w800)),
         ),
         const SizedBox(height: 8),
         FilledButton(
-          onPressed: _verificationCode.text.trim().length == 6 ? _verifyCode : null,
+          onPressed: _verificationCode.text.trim().length == 6 && !_loading ? _verifyCode : null,
           style: FilledButton.styleFrom(backgroundColor: const Color(0xFF9333EA), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-          child: const Text('Verify Email', style: TextStyle(fontWeight: FontWeight.w800)),
+          child: _loading 
+            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : const Text('Verify Email', style: TextStyle(fontWeight: FontWeight.w800)),
         ),
       ],
     );

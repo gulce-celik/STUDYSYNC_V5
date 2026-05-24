@@ -6,6 +6,17 @@ spring:
     name: studysync-backend
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${SPRING_MAIL_USERNAME:studysyncapp1@gmail.com}
+    password: ${SPRING_MAIL_PASSWORD:rglv qmlo rsal sirl}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 app:
   jwtSecret: ${JWT_SECRET:ThisIsAVeryLongSecretForTestingPurposesStudySync123!}

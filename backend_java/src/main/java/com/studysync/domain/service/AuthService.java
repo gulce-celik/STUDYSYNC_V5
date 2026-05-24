@@ -17,6 +17,15 @@ import com.studysync.security.JwtTokenProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import com.studysync.domain.entity.PendingRegistration;
+import com.studysync.domain.repository.PendingRegistrationRepository;
+import com.studysync.domain.dto.ActionResultDto;
+import com.studysync.domain.dto.VerifyOtpRequestDto;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
@@ -39,16 +48,23 @@ public class AuthService {
     private final ReferenceCatalogService referenceCatalogService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final PendingRegistrationRepository pendingRegistrationRepository;
+    private final EmailService emailService;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthService(
             UserAccountRepository userAccountRepository,
             ReferenceCatalogService referenceCatalogService,
             PasswordEncoder passwordEncoder,
-            JwtTokenProvider jwtTokenProvider) {
+            JwtTokenProvider jwtTokenProvider,
+            PendingRegistrationRepository pendingRegistrationRepository,
+            EmailService emailService) {
         this.userAccountRepository = userAccountRepository;
         this.referenceCatalogService = referenceCatalogService;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.pendingRegistrationRepository = pendingRegistrationRepository;
+        this.emailService = emailService;
     }
 
     public LoginResponseDto login(LoginRequestDto request) {
@@ -83,29 +99,99 @@ public class AuthService {
     }
 
     @Transactional
-    public LoginResponseDto register(RegisterRequestDto request) {
-        /*
-         * TODO:
-         * - existsByEmail → 409
-         * - email domain @std.yeditepe.edu.tr
-         * - passwordEncoder.encode
-         * - new UserAccount → save
-         * - JWT + refresh persist
-         */
+    public ActionResultDto register(RegisterRequestDto request) {
         if (userAccountRepository.existsByEmailIgnoreCase(request.email())) {
             throw new EmailAlreadyExistsException(request.email());
         }
 
-        // Antigravity Modification: Hardcoded University domain rule rejection policy
-        // mapping.
+        // Antigravity Modification: Hardcoded University domain rule rejection policy mapping.
         if (!request.email().trim().toLowerCase().endsWith("@std.yeditepe.edu.tr")) {
             throw new InvalidDomainException("@std.yeditepe.edu.tr");
         }
 
-        final UserAccount u = new UserAccount();
-        u.setEmail(request.email().trim().toLowerCase());
-        u.setPasswordHash(passwordEncoder.encode(request.password()));
-        u.setName(request.name());
+        String email = request.email().trim().toLowerCase();
+        
+        Optional<PendingRegistration> existingPendingOpt = pendingRegistrationRepository.findByEmailIgnoreCase(email);
+        PendingRegistration pending;
+        if (existingPendingOpt.isPresent()) {
+            pending = existingPendingOpt.get();
+            // Rate limit check: wait at least 60 seconds before sending another OTP
+            if (pending.getCreatedAt().plusSeconds(60).isAfter(LocalDateTime.now())) {
+                throw new RuntimeException("Lütfen yeni kod istemeden önce 60 saniye bekleyin."); // 429 logic handled by exception handler ideally
+            }
+        } else {
+            pending = new PendingRegistration();
+        }
+
+        pending.setEmail(email);
+        pending.setPasswordHash(passwordEncoder.encode(request.password()));
+        pending.setName(request.name());
+        pending.setNickname(request.nickname());
+        pending.setDepartmentId(request.departmentId());
+        pending.setYear(request.year());
+        pending.setKvkkAccepted(request.kvkkAccepted());
+        if (request.selectedCourseCodes() != null) {
+            pending.setEnrolledCourses(new java.util.ArrayList<>(request.selectedCourseCodes()));
+        }
+
+        // Generate 6-digit OTP
+        String otp = String.format("%06d", secureRandom.nextInt(1000000));
+        pending.setOtpCode(otp);
+        pending.setCreatedAt(LocalDateTime.now());
+        pending.setExpiresAt(LocalDateTime.now().plusMinutes(5));
+        pending.setAttempts(0);
+
+        pending.setVerified(false);
+
+        pendingRegistrationRepository.save(pending);
+        emailService.sendOtpEmail(email, otp);
+
+        return new ActionResultDto(true, "Doğrulama kodu e-posta adresinize gönderildi.", null, null);
+    }
+
+    @Transactional
+    public ActionResultDto verifyOtp(VerifyOtpRequestDto request) {
+        String email = request.email().trim().toLowerCase();
+        PendingRegistration pending = pendingRegistrationRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new RuntimeException("Bekleyen kayıt bulunamadı."));
+
+        if (pending.getAttempts() >= 3) {
+            pending.setExpiresAt(LocalDateTime.now()); // Expire immediately
+            pendingRegistrationRepository.save(pending);
+            throw new RuntimeException("Çok fazla hatalı deneme yaptınız. Lütfen yeni kod isteyin.");
+        }
+
+        if (pending.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Doğrulama kodunun süresi dolmuş. Lütfen yeni kod isteyin.");
+        }
+
+        if (!pending.getOtpCode().equals(request.otpCode())) {
+            pending.setAttempts(pending.getAttempts() + 1);
+            pendingRegistrationRepository.save(pending);
+            throw new RuntimeException("Geçersiz doğrulama kodu.");
+        }
+
+        pending.setVerified(true);
+        pendingRegistrationRepository.save(pending);
+        
+        return new ActionResultDto(true, "E-posta doğrulandı.", null, null);
+    }
+
+    @Transactional
+    public LoginResponseDto registerComplete(RegisterRequestDto request) {
+        String email = request.email().trim().toLowerCase();
+        PendingRegistration pending = pendingRegistrationRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new RuntimeException("Bekleyen kayıt bulunamadı."));
+
+        if (!pending.isVerified()) {
+            throw new RuntimeException("Lütfen önce e-posta adresinizi doğrulayın.");
+        }
+
+        // OTP Validated! Move to UserAccount
+        UserAccount u = new UserAccount();
+        u.setEmail(pending.getEmail());
+        u.setPasswordHash(pending.getPasswordHash());
+        u.setName(pending.getName());
         u.setNickname(request.nickname());
         u.setDepartmentId(request.departmentId());
         u.setYear(request.year());
@@ -114,7 +200,10 @@ public class AuthService {
         if (request.selectedCourseCodes() != null) {
             u.setEnrolledCourses(new java.util.ArrayList<>(request.selectedCourseCodes()));
         }
+        
         userAccountRepository.save(u);
+        pendingRegistrationRepository.delete(pending);
+
         final String deptName = referenceCatalogService
                 .resolveDepartmentName(u.getDepartmentId())
                 .orElse(u.getDepartmentId());

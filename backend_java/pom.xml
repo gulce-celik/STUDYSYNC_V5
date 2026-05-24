@@ -44,6 +44,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- E-mail Gonderimi (OTP) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- PostgreSQL JDBC Sürücüsü (Canlı Ortam / prod profili) -->
         <dependency>
             <groupId>org.postgresql</groupId>

@@ -48,10 +48,47 @@ class AuthApi {
     );
   }
 
-  /// [POST /auth/register] — gövde:
-  /// `email`, `password`, `name`, `nickname`, `departmentId`, `year`, `selectedCourseCodes`, `kvkkAccepted`
+  /// [POST /auth/register-init] — İlk adım (email, pass, name).
+  Future<void> registerInit({
+    required String email,
+    required String password,
+    required String name,
+    required String nickname,
+  }) async {
+    await ApiClient.instance.dio.post<Map<String, dynamic>>(
+      '/auth/register-init',
+      data: {
+        'email': email,
+        'password': password,
+        'name': name,
+        'nickname': nickname,
+        'kvkkAccepted': true, // DTO requires it to be not null and true
+      },
+    );
+  }
+
+  /// [POST /auth/verify-otp]
+  Future<void> verifyOtp({
+    required String email,
+    required String otpCode,
+  }) async {
+    await ApiClient.instance.dio.post<Map<String, dynamic>>(
+      '/auth/verify-otp',
+      data: {
+        'email': email,
+        'otpCode': otpCode,
+      },
+    );
+  }
+
+  /// [POST /auth/register-complete] — gövde:
+  /// `email`, `departmentId`, `year`, `selectedCourseCodes`, `kvkkAccepted`
   /// ve yanıtta login ile aynı token yapısı beklenir.
-  Future<LoginResult> register({
+  Future<LoginResult> registerComplete({
+    required String email,
+    required String password,
+    required String name,
+    required String nickname,
     required String email,
     required String password,
     required String name,
@@ -62,7 +99,7 @@ class AuthApi {
     required bool kvkkAccepted,
   }) async {
     final response = await ApiClient.instance.dio.post<Map<String, dynamic>>(
-      '/auth/register',
+      '/auth/register-complete',
       data: {
         'email': email,
         'password': password,

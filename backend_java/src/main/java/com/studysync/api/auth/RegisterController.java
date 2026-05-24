@@ -2,6 +2,8 @@
 
 package com.studysync.api.auth;
 
+import com.studysync.domain.dto.ActionResultDto;
+import com.studysync.domain.dto.VerifyOtpRequestDto;
 import com.studysync.domain.dto.LoginResponseDto;
 import com.studysync.domain.dto.RegisterRequestDto;
 import com.studysync.domain.service.AuthService;
@@ -26,8 +28,18 @@ public class RegisterController {
         this.authService = authService;
     }
 
-    @PostMapping("/register")
-    public LoginResponseDto register(@Valid @RequestBody RegisterRequestDto body) {
+    @PostMapping("/register-init")
+    public ActionResultDto registerInit(@Valid @RequestBody RegisterRequestDto body) {
         return authService.register(body);
+    }
+
+    @PostMapping("/verify-otp")
+    public ActionResultDto verifyOtp(@Valid @RequestBody VerifyOtpRequestDto body) {
+        return authService.verifyOtp(body);
+    }
+
+    @PostMapping("/register-complete")
+    public LoginResponseDto registerComplete(@Valid @RequestBody RegisterRequestDto body) {
+        return authService.registerComplete(body);
     }
 }

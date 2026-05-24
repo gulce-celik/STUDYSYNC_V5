@@ -21,7 +21,7 @@ public record RegisterRequestDto(
         @NotBlank String password,
         @NotBlank String name,
         String nickname,
-        @NotBlank String departmentId,
-        @NotNull Integer year,
+        String departmentId,
+        Integer year,
         List<String> selectedCourseCodes,
         @NotNull @AssertTrue(message = "KVKK notice must be accepted") Boolean kvkkAccepted) {}
