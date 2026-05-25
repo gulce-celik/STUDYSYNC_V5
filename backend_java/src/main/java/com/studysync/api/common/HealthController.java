@@ -2,6 +2,7 @@
 
 package com.studysync.api.common;
 
+import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +22,13 @@ public class HealthController {
         return Map.of(
                 "success", true,
                 "service", "studysync-backend",
-                "status", "UP");
+                "status", "UP",
+                "apiVersion", "2026-05-25",
+                "features",
+                List.of(
+                        "study-buddy-reports",
+                        "lost-found",
+                        "reservations",
+                        "check-in"));
     }
 }

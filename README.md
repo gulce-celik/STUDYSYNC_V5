@@ -148,6 +148,40 @@ Use full restart:
 - press `R` in Flutter terminal, or
 - stop (`q`) and rerun `flutter run`
 
+### E) Study Buddy report — `Could not submit report (HTTP 404)`
+
+The mobile app calls:
+
+`POST {API_BASE}/study-buddies/reports`  
+(default: `https://studysync-56nq.onrender.com/api/v1/study-buddies/reports`)
+
+**404 means the live backend does not include that route yet** (not a bad reason/comment). Redeploy the Render backend from latest `main` (needs commit with `POST /study-buddies/reports`), wait until Live, then full-restart the Flutter app.
+
+**Verify deploy:**
+
+```bash
+curl -s https://studysync-56nq.onrender.com/api/v1/health
+```
+
+Look for `"features"` containing `"study-buddy-reports"`. If missing, redeploy.
+
+**Verify report route (with student JWT):**
+
+```bash
+curl -i -X POST "https://studysync-56nq.onrender.com/api/v1/study-buddies/reports" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"reportedUserId\":\"2\",\"reason\":\"test\"}"
+```
+
+- **404** → redeploy backend  
+- **200** + `"success":false`** → route exists; fix `reportedUserId` (must be numeric `user_accounts.id`, not mock `user-2`)  
+- **200** + `"success":true`** → OK; check Neon table `buddy_reports`
+
+**Neon:** create `buddy_reports` if missing (Hibernate `ddl-auto: update` on prod startup, or run SQL from `ImplementationStatus/README.md` §5).
+
+Debug builds log `[StudyBuddy] POST /study-buddies/reports` in the console on submit.
+
 ---
 
 ## API Base URL Rules

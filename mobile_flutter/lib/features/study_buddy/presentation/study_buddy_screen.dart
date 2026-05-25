@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/demo/buddy_interaction_log.dart';
 import '../../../core/planner/ai_study_controller.dart';
 import '../../../core/session/auth_session.dart';
@@ -346,9 +348,19 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
       if (msg != null && msg.isNotEmpty) return msg;
     }
     final code = e.response?.statusCode;
+    if (code == 404) {
+      return 'Report API not found (HTTP 404). Redeploy backend on Render, then retry. '
+          'API: ${AppConfig.baseUrl}/study-buddies/reports';
+    }
     if (code == 401 || code == 403) return 'Log in required (HTTP $code).';
     if (code != null) return '$fallback (HTTP $code)';
     return fallback;
+  }
+
+  void _debugReportApi(String label, Object? detail) {
+    if (kDebugMode) {
+      debugPrint('[StudyBuddy] $label → $detail (API ${AppConfig.baseUrl})');
+    }
   }
 
   void _openReportDialog(StudyBuddyMockRow buddy) {
@@ -428,9 +440,15 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
                             if (!ctx.mounted) return;
                             if (!_actionSuccess(res['success'])) {
                               setDialogState(() => submitting = false);
-                              _toast(res['message']?.toString() ?? 'Report failed — try again.');
+                              final msg = res['message']?.toString() ?? 'Report failed — try again.';
+                              _debugReportApi('POST /study-buddies/reports', 'success=false $msg');
+                              _toast(msg);
                               return;
                             }
+                            _debugReportApi(
+                              'POST /study-buddies/reports',
+                              'id=${res['report']?['id']} reportedUserId=${buddy.userId}',
+                            );
                             BuddyInteractionLog.add(
                               buddyName: buddy.name,
                               reportedUserId: buddy.userId,
@@ -444,7 +462,12 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
                           } on DioException catch (e) {
                             if (!ctx.mounted) return;
                             setDialogState(() => submitting = false);
-                            _toast(_dioErrorMessage(e, 'Could not submit report'));
+                            final msg = _dioErrorMessage(e, 'Could not submit report');
+                            _debugReportApi(
+                              'POST /study-buddies/reports',
+                              '${e.response?.statusCode} ${e.requestOptions.uri} $msg',
+                            );
+                            _toast(msg);
                           } catch (_) {
                             if (!ctx.mounted) return;
                             setDialogState(() => submitting = false);

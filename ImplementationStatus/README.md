@@ -10,7 +10,7 @@ Living log of shipped features — what was built, where it lives, how to verify
 | Same-day slot booking | Done | 2026-05-22 |
 | No-show auto-cancel (past dates) | Done | 2026-05-22 |
 | Lost & Found (backend) | Partial — known bugs | 2026-05-23 |
-| Study Buddy reports (backend) | Done — Flutter not wired | 2026-05-25 |
+| Study Buddy reports (backend + mobile POST) | Done — needs Render redeploy if 404 | 2026-05-25 |
 
 ---
 
@@ -147,7 +147,9 @@ Persisted student-on-student reports (`buddy_reports` table). Reporter comes fro
 
 **Backend:** `BuddyReportRecord`, `BuddyReportService`, `BuddyReportMapper`, `BuddyReportPolicy` (`OPEN` / `DISMISSED` / `RESOLVED`), `StudyBuddyController` + `AdminBuddyReportsController`. Self-report rejected; `reportedUserId` must be numeric user id.
 
-**Flutter (not wired):** Study Buddy still uses session `BuddyInteractionLog`; admin still merges mock + live log until `StudyBuddyApi.submitReport` and `fetchAdminBuddyReports` parsing land.
+**Flutter:** `StudyBuddyApi.submitReport` → `POST /study-buddies/reports`; **Previous** tab still mirrors successful submits in `BuddyInteractionLog`. Admin list still mock + session until `fetchAdminBuddyReports` parsing lands.
+
+**404 on submit:** production Render not redeployed after backend route shipped — see [README §E](../README.md).
 
 ```bash
 cd backend_java && mvnw test -Dtest=BuddyReportServiceTest
@@ -197,7 +199,8 @@ Tracked from [HANDOFF.md](../HANDOFF.md) (2026-05-22). Mobile-only work is omitt
 | | Task | Notes |
 |---|------|--------|
 | [ ] | Real `StudyBuddyService.getSuggestions` | Replace empty API + mobile sample fallback |
-| [x] | Buddy report persistence (backend) | `POST /study-buddies/reports`, `GET /admin/buddy-reports`; mobile still session mock |
+| [x] | Buddy report persistence | `POST /study-buddies/reports`, `GET /admin/buddy-reports`; mobile POST wired |
+| [ ] | Buddy report on prod (Render) | Redeploy backend; `GET /health` → `study-buddy-reports` in `features` |
 | [ ] | Group invitations API | Home invite card is still sample data |
 
 ### Notifications
