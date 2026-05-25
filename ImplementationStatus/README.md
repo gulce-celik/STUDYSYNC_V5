@@ -10,6 +10,7 @@ Living log of shipped features — what was built, where it lives, how to verify
 | Same-day slot booking | Done | 2026-05-22 |
 | No-show auto-cancel (past dates) | Done | 2026-05-22 |
 | Lost & Found (backend) | Partial — known bugs | 2026-05-23 |
+| Study Buddy reports (backend) | Done — Flutter not wired | 2026-05-25 |
 
 ---
 
@@ -135,6 +136,27 @@ Reported on device against production (`https://studysync-56nq.onrender.com/api/
 
 ---
 
+## 5. Study Buddy reports (backend)
+
+Persisted student-on-student reports (`buddy_reports` table). Reporter comes from JWT; request body only has `reportedUserId`, `reason`, optional `comment`.
+
+| Endpoint | Role |
+|----------|------|
+| `POST /study-buddies/reports` | Student submit → `{ success, message, report? }` |
+| `GET /admin/buddy-reports` | Admin list — `OPEN` only, newest first |
+
+**Backend:** `BuddyReportRecord`, `BuddyReportService`, `BuddyReportMapper`, `BuddyReportPolicy` (`OPEN` / `DISMISSED` / `RESOLVED`), `StudyBuddyController` + `AdminBuddyReportsController`. Self-report rejected; `reportedUserId` must be numeric user id.
+
+**Flutter (not wired):** Study Buddy still uses session `BuddyInteractionLog`; admin still merges mock + live log until `StudyBuddyApi.submitReport` and `fetchAdminBuddyReports` parsing land.
+
+```bash
+cd backend_java && mvnw test -Dtest=BuddyReportServiceTest
+```
+
+**Out of scope:** dismiss/resolve API, admin role guard, real suggestions matcher, Flutter UI changes.
+
+---
+
 ## Backend TODO
 
 Tracked from [HANDOFF.md](../HANDOFF.md) (2026-05-22). Mobile-only work is omitted. Shipped backend work is in sections 1–3 above, not repeated here.
@@ -175,7 +197,7 @@ Tracked from [HANDOFF.md](../HANDOFF.md) (2026-05-22). Mobile-only work is omitt
 | | Task | Notes |
 |---|------|--------|
 | [ ] | Real `StudyBuddyService.getSuggestions` | Replace empty API + mobile sample fallback |
-| [ ] | Buddy report persistence | `GET/POST /admin/buddy-reports` (mobile logs to session today) |
+| [x] | Buddy report persistence (backend) | `POST /study-buddies/reports`, `GET /admin/buddy-reports`; mobile still session mock |
 | [ ] | Group invitations API | Home invite card is still sample data |
 
 ### Notifications
@@ -225,3 +247,4 @@ cd backend_java && mvn test
 | 2026-05-23 | Lost & Found — `reportedBy`, active GET + `expiresAt`, `ExpireLostItemsJob`, mobile `expiresAt` |
 | 2026-05-23 | Lost & Found — §4 **Known bugs**: Found *not found*, `reportedByUserId` missing, Render/deploy checklist |
 | 2026-05-24 | KVKK consent persistence — backend entity/DTO validation + Flutter API and session persistence |
+| 2026-05-25 | Study Buddy reports — `buddy_reports` entity, POST submit + admin GET OPEN list; `BuddyReportServiceTest` |

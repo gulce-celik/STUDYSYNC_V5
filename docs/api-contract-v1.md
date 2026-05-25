@@ -74,6 +74,18 @@ default is `http://localhost:8080/api/v1` on iOS simulator / desktop; on **Andro
 - `GET /study-buddies/suggestions?courseCode=CSE344&slotId=slot-2`
   - response: `StudyBuddySuggestion[]`
 
+- `POST /study-buddies/reports`
+  - request:
+    - `reportedUserId` (string, numeric user id)
+    - `reason` (string, required)
+    - `comment` (string, optional)
+  - response: `{ success, message, report?: BuddyReport }` — reporter set server-side from JWT
+
+## Admin — Study Buddy reports
+
+- `GET /admin/buddy-reports`
+  - response: `BuddyReport[]` (status `OPEN` only)
+
 ## Course Rating
 
 - `GET /courses`
@@ -127,6 +139,7 @@ Used by the mobile weekly grid so study-time suggestions can avoid marked slots.
 - `Workspace`: `id`, `type`, `capacity`, `status`, `x`, `y`, `qrCode` (`desk-N` → desk number `N`, e.g. `desk-12` → `12`; `group-N` → `GN`)
 - `ReservationDetail`: `id`, `workspaceId`, `date`, `slotId`, `slotLabel`, `status`, `courseCode`, `participants`, `qrPayload`, `score` (`0` at creation; COMPLETED `+5`, NO_SHOW `−10`, CANCELLED per cancel policy)
 - `StudyBuddySuggestion`: `userId`, `name`, `matchScore`, `commonCourses`, `commonTopics`
+- `BuddyReport`: `id`, `reportedUserId`, `reportedName`, `reporterLabel`, `reason`, `comment`, `createdAt` (ISO-8601), `status` (`OPEN`|`DISMISSED`|`RESOLVED`)
 - `Course`: `code`, `name`, `difficultyRating`, `ratingCount`
 - `LostItem`: `id`, `workspaceId`, `description`, `reportedAt`
 - `WeeklyScheduleBlock`: `day`, `timeSlot`, `type`, `label` (see Weekly schedule section)
