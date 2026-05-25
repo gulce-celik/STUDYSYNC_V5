@@ -337,64 +337,131 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
     }
   }
 
+  static bool _actionSuccess(dynamic value) => value == true || value == 'true';
+
+  static String _dioErrorMessage(DioException e, String fallback) {
+    final data = e.response?.data;
+    if (data is Map) {
+      final msg = data['message']?.toString();
+      if (msg != null && msg.isNotEmpty) return msg;
+    }
+    final code = e.response?.statusCode;
+    if (code == 401 || code == 403) return 'Log in required (HTTP $code).';
+    if (code != null) return '$fallback (HTTP $code)';
+    return fallback;
+  }
+
   void _openReportDialog(StudyBuddyMockRow buddy) {
     _reportReason.clear();
     _reportComment.clear();
     showDialog<void>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Report User'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Reporting ${buddy.name}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _reportReason,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Reason *',
-                    hintText: 'Describe inappropriate behavior...',
-                    border: OutlineInputBorder(),
-                  ),
+      builder: (dialogContext) {
+        var submitting = false;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Report User'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Reporting ${buddy.name}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _reportReason,
+                      enabled: !submitting,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Reason *',
+                        hintText: 'Describe inappropriate behavior...',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _reportComment,
+                      enabled: !submitting,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Comment (optional)',
+                        hintText: 'Additional context for moderators...',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _reportComment,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Comment (optional)',
-                    hintText: 'Additional context for moderators...',
-                    border: OutlineInputBorder(),
-                  ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting ? null : () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          if (_reportReason.text.trim().isEmpty) {
+                            _toast('Please enter a report reason.');
+                            return;
+                          }
+                          final token = AuthSession.instance.accessToken;
+                          if (token == null || token.isEmpty) {
+                            _toast('Log in to submit a report.');
+                            return;
+                          }
+                          if (buddy.userId.trim().isEmpty) {
+                            _toast('Cannot report this user — missing user id.');
+                            return;
+                          }
+                          setDialogState(() => submitting = true);
+                          try {
+                            final res = await _api.submitReport(
+                              reportedUserId: buddy.userId,
+                              reason: _reportReason.text.trim(),
+                              comment: _reportComment.text.trim(),
+                            );
+                            if (!ctx.mounted) return;
+                            if (!_actionSuccess(res['success'])) {
+                              setDialogState(() => submitting = false);
+                              _toast(res['message']?.toString() ?? 'Report failed — try again.');
+                              return;
+                            }
+                            BuddyInteractionLog.add(
+                              buddyName: buddy.name,
+                              reportedUserId: buddy.userId,
+                              reportReason: _reportReason.text.trim(),
+                              comment: _reportComment.text.trim(),
+                            );
+                            Navigator.pop(ctx);
+                            if (!mounted) return;
+                            setState(() => _sectionIndex = 1);
+                            _toast('Report submitted — see Previous tab.');
+                          } on DioException catch (e) {
+                            if (!ctx.mounted) return;
+                            setDialogState(() => submitting = false);
+                            _toast(_dioErrorMessage(e, 'Could not submit report'));
+                          } catch (_) {
+                            if (!ctx.mounted) return;
+                            setDialogState(() => submitting = false);
+                            _toast('Could not submit report.');
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Submit'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () {
-                if (_reportReason.text.trim().isEmpty) {
-                  _toast('Please enter a report reason.');
-                  return;
-                }
-                BuddyInteractionLog.add(
-                  buddyName: buddy.name,
-                  reportedUserId: buddy.userId,
-                  reportReason: _reportReason.text.trim(),
-                  comment: _reportComment.text.trim(),
-                );
-                Navigator.pop(ctx);
-                setState(() => _sectionIndex = 1);
-                _toast('Report saved — see Previous tab.');
-              },
-              child: const Text('Submit'),
-            ),
-          ],
+            );
+          },
         );
       },
     );
