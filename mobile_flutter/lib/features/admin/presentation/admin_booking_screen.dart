@@ -312,7 +312,7 @@ class _AdminBookingScreenState extends State<AdminBookingScreen> {
         ],
         const SizedBox(height: 12),
         Text(
-          'Closures apply only to the selected day (session demo). Backend: PATCH /admin/workspaces/{id}/closure.',
+          'Closures apply only to the selected day.',
           style: TextStyle(fontSize: 11, color: Colors.grey.shade600, height: 1.35),
         ),
       ],

@@ -11,9 +11,14 @@ class AdminRosterStore extends ChangeNotifier {
   static const defaultDemoPassword = 'Admin123!';
 
   final Map<String, String> _passwords = {
-    'gulce@yeditepe.edu.tr': defaultDemoPassword,
-    'admin@yeditepe.edu.tr': defaultDemoPassword,
-    'emre@yeditepe.edu.tr': defaultDemoPassword,
+    'oykuaksungur@yeditepe.edu.tr': '${defaultDemoPassword}oa',
+    'emreunuvar@yeditepe.edu.tr': '${defaultDemoPassword}eu',
+    'efekasapoglu@yeditepe.edu.tr': '${defaultDemoPassword}ek',
+    'emrebardak@yeditepe.edu.tr': '${defaultDemoPassword}eb',
+    'nazyunusoglu@yeditepe.edu.tr': '${defaultDemoPassword}ny',
+    'gulcecelik@yeditepe.edu.tr': '${defaultDemoPassword}gc',
+    'melisatokatli@yeditepe.edu.tr': '${defaultDemoPassword}mt',
+    'admin@yeditepe.edu.tr': defaultDemoPassword
   };
 
   List<String> get emails {

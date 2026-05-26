@@ -44,7 +44,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     }
     if (!AdminAllowlist.verifyPassword(email, password)) {
       setState(() {
-        _error = 'Invalid password. Demo staff password: Admin123! (capital A, exclamation mark).';
+        _error = 'Invalid password.';
       });
       return;
     }
@@ -156,16 +156,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         style: TextStyle(fontSize: 12, height: 1.35, color: Colors.grey.shade600),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'Live map data uses API when backend is on 8080 (demo bridge: ${AdminApi.bridgeStudentEmail}).',
-                        style: const TextStyle(fontSize: 10, height: 1.35, color: Color(0xFF1E40AF)),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Demo: gulce@yeditepe.edu.tr / Admin123!',
-                        style: TextStyle(fontSize: 11, color: Color(0xFF1E40AF), fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 10),
+
                       TextField(
                         controller: _emailCtrl,
                         keyboardType: TextInputType.emailAddress,

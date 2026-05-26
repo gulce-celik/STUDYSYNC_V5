@@ -32,7 +32,7 @@ class AdminAdminsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Staff email on @yeditepe.edu.tr. Demo password: ${AdminRosterStore.defaultDemoPassword}',
+                    'Staff email on @yeditepe.edu.tr.',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.35),
                   ),
                   const SizedBox(height: 12),
@@ -140,7 +140,7 @@ class AdminAdminsScreen extends StatelessWidget {
           children: [
             const AdminSectionTitle('Staff administrators'),
             Text(
-              'Who can open StudySync Admin. Changes apply on this device until backend staff APIs ship.',
+              'Who can open StudySync Admin.',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.35),
             ),
             const SizedBox(height: 12),
