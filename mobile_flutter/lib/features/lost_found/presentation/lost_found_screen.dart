@@ -383,9 +383,20 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
                     height: hi,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: _fill(ws),
+                        color: lost && ws.status == 'occupied' ? null : _fill(ws),
+                        gradient: lost && ws.status == 'occupied'
+                            ? const LinearGradient(
+                                colors: [Color(0xFFF87171), Color(0xFFFBBF24)],
+                                stops: [0.5, 0.5],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : null,
                         borderRadius: BorderRadius.circular(ws.type == 'individual' ? 3 : 6),
-                        border: Border.all(color: _stroke(ws), width: 2),
+                        border: Border.all(
+                          color: lost && ws.status == 'occupied' ? const Color(0xFFDC2626) : _stroke(ws),
+                          width: 2,
+                        ),
                       ),
                       child: Stack(
                         children: [

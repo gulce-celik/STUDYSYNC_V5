@@ -780,7 +780,15 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 120),
                                 decoration: BoxDecoration(
-                                  color: _fillForWorkspace(ws),
+                                  color: _lostAt(ws.id) && ws.status == 'occupied' ? null : _fillForWorkspace(ws),
+                                  gradient: _lostAt(ws.id) && ws.status == 'occupied'
+                                      ? const LinearGradient(
+                                          colors: [Color(0xFFF87171), Color(0xFFFBBF24)],
+                                          stops: [0.5, 0.5],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
+                                      : null,
                                   borderRadius: BorderRadius.circular(ws.type == 'individual' ? 3 : 6),
                                   border: Border.all(
                                     color: _lostAt(ws.id) ? const Color(0xFFF59E0B) : _strokeForWorkspace(ws),

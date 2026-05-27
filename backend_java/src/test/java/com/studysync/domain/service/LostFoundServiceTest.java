@@ -53,17 +53,20 @@ class LostFoundServiceTest {
     }
 
     @Test
-    void getLostItems_returnsOnlyActiveOpenItems() {
+    void getLostItems_returnsOnlyActiveOpenOrFoundItems() {
         LostItemRecord active = reportedItem("desk-active", NOW.minus(2, ChronoUnit.HOURS));
         LostItemRecord stale = reportedItem("desk-stale", NOW.minus(25, ChronoUnit.HOURS));
+        LostItemRecord found = reportedItem("desk-found", NOW.minus(3, ChronoUnit.HOURS));
+        found.setStatus(LostFoundPolicy.STATUS_FOUND);
 
-        when(lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.OPEN_STATUSES))
-                .thenReturn(List.of(active, stale));
+        when(lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.VISIBLE_STATUSES))
+                .thenReturn(List.of(active, stale, found));
 
         var items = service.getLostItems();
 
-        assertEquals(1, items.size());
+        assertEquals(2, items.size());
         assertEquals("desk-active", items.get(0).workspaceId());
+        assertEquals("desk-found", items.get(1).workspaceId());
     }
 
     @Test
@@ -139,7 +142,7 @@ class LostFoundServiceTest {
     void expireStaleReports_deletesPastTtl() {
         LostItemRecord active = reportedItem("desk-10", NOW.minus(1, ChronoUnit.HOURS));
         LostItemRecord stale = reportedItem("desk-11", NOW.minus(25, ChronoUnit.HOURS));
-        when(lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.OPEN_STATUSES))
+        when(lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.VISIBLE_STATUSES))
                 .thenReturn(List.of(active, stale));
 
         int count = service.expireStaleReports(NOW);

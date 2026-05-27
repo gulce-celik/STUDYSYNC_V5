@@ -18,8 +18,10 @@ public final class LostFoundPolicy {
     public static final String STATUS_EXPIRED = "EXPIRED";
 
     public static final List<String> OPEN_STATUSES = List.of(STATUS_REPORTED, STATUS_LOST);
+    public static final List<String> VISIBLE_STATUSES = List.of(STATUS_REPORTED, STATUS_LOST, STATUS_FOUND);
 
     private static final Set<String> OPEN_STATUS_SET = Set.copyOf(OPEN_STATUSES);
+    private static final Set<String> VISIBLE_STATUS_SET = Set.copyOf(VISIBLE_STATUSES);
 
     private LostFoundPolicy() {}
 
@@ -31,10 +33,14 @@ public final class LostFoundPolicy {
         return status != null && OPEN_STATUS_SET.contains(status);
     }
 
+    public static boolean isVisibleStatus(String status) {
+        return status != null && VISIBLE_STATUS_SET.contains(status);
+    }
+
     public static boolean isActive(LostItemRecord record, Instant now) {
         if (record == null || record.getReportedAt() == null) {
             return false;
         }
-        return isOpenStatus(record.getStatus()) && expiresAt(record.getReportedAt()).isAfter(now);
+        return isVisibleStatus(record.getStatus()) && expiresAt(record.getReportedAt()).isAfter(now);
     }
 }

@@ -37,11 +37,11 @@ public class LostFoundService {
         this.clock = clock;
     }
 
-    /** Active reports only: open status and within the 24h window. */
+    /** Active reports only: open or found status and within the 24h window. */
     @Transactional(readOnly = true)
     public List<LostItemDto> getLostItems() {
         Instant now = clock.instant();
-        return lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.OPEN_STATUSES).stream()
+        return lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.VISIBLE_STATUSES).stream()
                 .filter(r -> LostFoundPolicy.isActive(r, now))
                 .map(LostItemMapper::toDto)
                 .toList();
@@ -138,10 +138,10 @@ public class LostFoundService {
                         "User account not found (id=" + resolvedUserId + "). Log out and log in again."));
     }
 
-    /** Deletes open items past the 24h visibility window. */
+    /** Deletes visible items past the 24h visibility window. */
     @Transactional
     public int expireStaleReports(Instant now) {
-        var stale = lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.OPEN_STATUSES).stream()
+        var stale = lostItemRepository.findByStatusInOrderByReportedAtDesc(LostFoundPolicy.VISIBLE_STATUSES).stream()
                 .filter(record -> !LostFoundPolicy.isActive(record, now))
                 .toList();
         if (!stale.isEmpty()) {
