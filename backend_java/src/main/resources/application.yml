@@ -5,22 +5,17 @@ spring:
   application:
     name: studysync-backend
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:prod}
   mail:
     host: smtp.gmail.com
     port: 587
     username: ${SPRING_MAIL_USERNAME:placeholder@gmail.com}
     password: ${SPRING_MAIL_PASSWORD:placeholder}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
 
 app:
   jwtSecret: ${JWT_SECRET:ThisIsAVeryLongSecretForTestingPurposesStudySync123!}
   jwtExpirationMs: ${JWT_EXPIRATION_MS:86400000}
+  baseUrl: ${APP_BASE_URL:http://localhost:8080}
 
 brevo:
   api:
@@ -73,3 +68,25 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false
+
+---
+# ==================== LOCAL NEON PROFİLİ ====================
+# Yerel ortamda doğrudan canlı Neon veritabanına bağlanmak için.
+# Kullanım: SPRING_PROFILES_ACTIVE=local-neon olarak ayarlanır.
+spring:
+  config:
+    activate:
+      on-profile: local-neon
+  datasource:
+    url: ${DATABASE_URL}
+    driver-class-name: org.postgresql.Driver
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+  h2:
+    console:
+      enabled: false
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true

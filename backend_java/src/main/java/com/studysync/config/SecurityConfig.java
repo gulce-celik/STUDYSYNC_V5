@@ -36,6 +36,9 @@ public class SecurityConfig {
                                         "/api/v1/auth/verify-otp",
                                         "/api/v1/auth/register-complete",
                                         "/api/v1/auth/refresh",
+                                        "/api/v1/auth/forgot-password",
+                                        "/api/v1/auth/reset-password",
+                                        "/api/v1/auth/reset-password-otp",
                                         "/api/v1/health",
                                         "/api/v1/reference/**",
                                         "/error")

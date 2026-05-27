@@ -161,7 +161,9 @@ class AiStudyController extends ChangeNotifier {
     }
 
     _suggestions = generated;
-    notifyListeners();
+    Future.microtask(() {
+      notifyListeners();
+    });
   }
 
   List<String> _preferredSlotCandidates() {

@@ -21,8 +21,11 @@ class AppConfig {
     // 1) Compile-time override varsa onu kullan
     if (_fromEnv.isNotEmpty) return _fromEnv;
 
-    // Tüm ekip üyeleri geliştirme aşamasında da ortak canlı sunucuyu ve 
-    // ortak Neon veritabanını kullanmak istediği için her durumda canlı URL döndürülür:
+    // Local test modu: Hata ayıklama modunda yerel sunucuya, aksi halde canlıya bağlanır
+    if (kDebugMode) {
+      // 10.0.2.2 is the localhost loopback alias for Android Emulator
+      return Platform.isAndroid ? 'http://10.0.2.2:8080/api/v1' : 'http://localhost:8080/api/v1';
+    }
     return _productionUrl;
   }
 }

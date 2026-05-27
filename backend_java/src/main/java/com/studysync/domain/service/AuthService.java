@@ -1,5 +1,3 @@
-/* FILE PURPOSE: Is kurallari ve use-case akislari; controller ve repository arasinda orkestrasyon. */
-
 package com.studysync.domain.service;
 
 import com.studysync.domain.dto.LoginRequestDto;
@@ -8,11 +6,15 @@ import com.studysync.domain.dto.RegisterRequestDto;
 import com.studysync.domain.dto.UpdateCoursesRequestDto;
 import com.studysync.domain.dto.UserSummaryDto;
 import com.studysync.domain.dto.ChangePasswordRequestDto;
+import com.studysync.domain.dto.ForgotPasswordRequestDto;
 import com.studysync.domain.entity.UserAccount;
+import com.studysync.domain.entity.PasswordResetToken;
 import com.studysync.domain.exception.EmailAlreadyExistsException;
 import com.studysync.domain.exception.InvalidCredentialsException;
 import com.studysync.domain.exception.InvalidDomainException;
+import com.studysync.domain.exception.UserNotFoundException;
 import com.studysync.domain.repository.UserAccountRepository;
+import com.studysync.domain.repository.PasswordResetTokenRepository;
 import com.studysync.security.JwtTokenProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,12 +23,11 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import com.studysync.domain.entity.PendingRegistration;
 import com.studysync.domain.repository.PendingRegistrationRepository;
 import com.studysync.domain.dto.ActionResultDto;
 import com.studysync.domain.dto.VerifyOtpRequestDto;
-import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
 
 /**
  * Kimlik doğrulama ve kayıt — login JWT, refresh akışı, e-posta tekilliği.
@@ -50,6 +51,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final PendingRegistrationRepository pendingRegistrationRepository;
     private final EmailService emailService;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthService(
@@ -58,13 +60,15 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtTokenProvider jwtTokenProvider,
             PendingRegistrationRepository pendingRegistrationRepository,
-            EmailService emailService) {
+            EmailService emailService,
+            PasswordResetTokenRepository passwordResetTokenRepository) {
         this.userAccountRepository = userAccountRepository;
         this.referenceCatalogService = referenceCatalogService;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.pendingRegistrationRepository = pendingRegistrationRepository;
         this.emailService = emailService;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
     }
 
     public LoginResponseDto login(LoginRequestDto request) {
@@ -104,20 +108,23 @@ public class AuthService {
             throw new EmailAlreadyExistsException(request.email());
         }
 
-        // Antigravity Modification: Hardcoded University domain rule rejection policy mapping.
+        // Antigravity Modification: Hardcoded University domain rule rejection policy
+        // mapping.
         if (!request.email().trim().toLowerCase().endsWith("@std.yeditepe.edu.tr")) {
             throw new InvalidDomainException("@std.yeditepe.edu.tr");
         }
 
         String email = request.email().trim().toLowerCase();
-        
+
         Optional<PendingRegistration> existingPendingOpt = pendingRegistrationRepository.findByEmailIgnoreCase(email);
         PendingRegistration pending;
         if (existingPendingOpt.isPresent()) {
             pending = existingPendingOpt.get();
             // Rate limit check: wait at least 60 seconds before sending another OTP
             if (pending.getCreatedAt().plusSeconds(60).isAfter(LocalDateTime.now())) {
-                throw new RuntimeException("Lütfen yeni kod istemeden önce 60 saniye bekleyin."); // 429 logic handled by exception handler ideally
+                throw new RuntimeException("Please wait 60 seconds before requesting a new code."); // 429 logic handled
+                                                                                                  // by exception
+                                                                                                  // handler ideally
             }
         } else {
             pending = new PendingRegistration();
@@ -146,45 +153,45 @@ public class AuthService {
         pendingRegistrationRepository.save(pending);
         emailService.sendOtpEmail(email, otp);
 
-        return new ActionResultDto(true, "Doğrulama kodu e-posta adresinize gönderildi.", null, null);
+        return new ActionResultDto(true, "Verification code has been sent to your email address.", null, null);
     }
 
     @Transactional
     public ActionResultDto verifyOtp(VerifyOtpRequestDto request) {
         String email = request.email().trim().toLowerCase();
         PendingRegistration pending = pendingRegistrationRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new RuntimeException("Bekleyen kayıt bulunamadı."));
+                .orElseThrow(() -> new RuntimeException("Pending registration not found."));
 
         if (pending.getAttempts() >= 3) {
             pending.setExpiresAt(LocalDateTime.now()); // Expire immediately
             pendingRegistrationRepository.save(pending);
-            throw new RuntimeException("Çok fazla hatalı deneme yaptınız. Lütfen yeni kod isteyin.");
+            throw new RuntimeException("Too many incorrect attempts. Please request a new code.");
         }
 
         if (pending.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Doğrulama kodunun süresi dolmuş. Lütfen yeni kod isteyin.");
+            throw new RuntimeException("Verification code has expired. Please request a new code.");
         }
 
         if (!pending.getOtpCode().equals(request.otpCode())) {
             pending.setAttempts(pending.getAttempts() + 1);
             pendingRegistrationRepository.save(pending);
-            throw new RuntimeException("Geçersiz doğrulama kodu.");
+            throw new RuntimeException("Invalid verification code.");
         }
 
         pending.setVerified(true);
         pendingRegistrationRepository.save(pending);
-        
-        return new ActionResultDto(true, "E-posta doğrulandı.", null, null);
+
+        return new ActionResultDto(true, "Email successfully verified.", null, null);
     }
 
     @Transactional
     public LoginResponseDto registerComplete(RegisterRequestDto request) {
         String email = request.email().trim().toLowerCase();
         PendingRegistration pending = pendingRegistrationRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new RuntimeException("Bekleyen kayıt bulunamadı."));
+                .orElseThrow(() -> new RuntimeException("Pending registration not found."));
 
         if (!pending.isVerified()) {
-            throw new RuntimeException("Lütfen önce e-posta adresinizi doğrulayın.");
+            throw new RuntimeException("Please verify your email address first.");
         }
 
         // OTP Validated! Move to UserAccount
@@ -200,7 +207,7 @@ public class AuthService {
         if (request.selectedCourseCodes() != null) {
             u.setEnrolledCourses(new java.util.ArrayList<>(request.selectedCourseCodes()));
         }
-        
+
         userAccountRepository.save(u);
         pendingRegistrationRepository.delete(pending);
 
@@ -261,11 +268,80 @@ public class AuthService {
         // veritabanından managed entity yükleyerek Hibernate takibini garanti ediyoruz.
         UserAccount managed = userAccountRepository.findById(currentUser.getId())
                 .orElseThrow(() -> new RuntimeException("User not found: " + currentUser.getId()));
-        
+
         List<String> incoming = request.courses() != null ? request.courses() : List.of();
         managed.getEnrolledCourses().clear();
         managed.getEnrolledCourses().addAll(incoming);
-        
+
         userAccountRepository.saveAndFlush(managed);
+    }
+
+    @Transactional
+    public void forgotPassword(ForgotPasswordRequestDto request, String backendBaseUrl) {
+        String email = request.email().trim().toLowerCase();
+        UserAccount user = userAccountRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new UserNotFoundException("No user found registered with this email address."));
+
+        // Delete any existing tokens for this email
+        passwordResetTokenRepository.deleteByEmailIgnoreCase(email);
+
+        // Generate 6-digit OTP
+        String otp = String.format("%06d", secureRandom.nextInt(1000000));
+        PasswordResetToken resetToken = new PasswordResetToken(
+                otp,
+                email,
+                LocalDateTime.now().plusMinutes(15) // 15 mins expiry
+        );
+        passwordResetTokenRepository.save(resetToken);
+
+        // Send email with OTP code
+        emailService.sendPasswordResetEmail(email, otp);
+    }
+
+    @Transactional
+    public void resetPassword(String token, String newPassword) {
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Invalid or expired password reset link."));
+
+        if (resetToken.isExpired()) {
+            passwordResetTokenRepository.delete(resetToken);
+            throw new RuntimeException("Password reset link has expired.");
+        }
+
+        UserAccount user = userAccountRepository.findByEmailIgnoreCase(resetToken.getEmail())
+                .orElseThrow(() -> new RuntimeException("User not found."));
+
+        // Hash new password and save
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userAccountRepository.save(user);
+
+        // Delete used token
+        passwordResetTokenRepository.delete(resetToken);
+    }
+
+    @Transactional
+    public void resetPasswordOtp(String email, String otpCode, String newPassword) {
+        String normalizedEmail = email.trim().toLowerCase();
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new RuntimeException("Invalid or expired verification code."));
+
+        if (resetToken.isExpired()) {
+            passwordResetTokenRepository.delete(resetToken);
+            throw new RuntimeException("Verification code has expired. Please request a new code.");
+        }
+
+        if (!resetToken.getToken().equals(otpCode.trim())) {
+            throw new RuntimeException("Invalid verification code.");
+        }
+
+        UserAccount user = userAccountRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new RuntimeException("User not found."));
+
+        // Hash new password and save
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userAccountRepository.save(user);
+
+        // Delete used token
+        passwordResetTokenRepository.delete(resetToken);
     }
 }

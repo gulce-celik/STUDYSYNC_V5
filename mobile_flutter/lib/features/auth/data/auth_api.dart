@@ -142,6 +142,16 @@ class AuthApi {
       );
     } on DioException catch (e) {
       final status = e.response?.statusCode;
+      final data = e.response?.data;
+      
+      // Backend'den dönen yapılandırılmış hata mesajı varsa doğrudan göster
+      if (data is Map<String, dynamic> && data['message'] != null) {
+        return PasswordResetResult(
+          status: PasswordResetStatus.invalidRequest,
+          message: data['message'].toString(),
+        );
+      }
+      
       if (status == 404 || status == 501 || status == 405) {
         return const PasswordResetResult(
           status: PasswordResetStatus.notAvailable,
@@ -169,6 +179,22 @@ class AuthApi {
         message: e.message ?? 'Password reset request failed.',
       );
     }
+  }
+
+  /// [POST /auth/reset-password-otp] — OTP ile şifre sıfırlama endpointi.
+  Future<void> resetPasswordOtp({
+    required String email,
+    required String otpCode,
+    required String newPassword,
+  }) async {
+    await ApiClient.instance.dio.post<void>(
+      '/auth/reset-password-otp',
+      data: {
+        'email': email,
+        'otpCode': otpCode,
+        'newPassword': newPassword,
+      },
+    );
   }
 
   /// [PUT /auth/password] — Şifre değiştirme endpointi.
