@@ -149,14 +149,20 @@ public class ReservationService {
                     "This time slot has already started. Choose a later slot today or another day.");
         }
 
-        // 3. Validation: Advance Booking Window (Mon/Fri Rule)
-        if (targetDate.isAfter(today)) {
-            java.time.DayOfWeek todayDay = today.getDayOfWeek();
-            boolean isMonday = todayDay == java.time.DayOfWeek.MONDAY;
-            boolean isFriday = todayDay == java.time.DayOfWeek.FRIDAY;
-
-            if (!isMonday && !isFriday) {
-                throw new IllegalStateException("Advance booking is only allowed on Mondays and Fridays.");
+        // 3. Validation: Weekly Booking Periods & Restrictions
+        java.time.DayOfWeek todayDay = today.getDayOfWeek();
+        if (todayDay == java.time.DayOfWeek.MONDAY || todayDay == java.time.DayOfWeek.TUESDAY ||
+                todayDay == java.time.DayOfWeek.WEDNESDAY || todayDay == java.time.DayOfWeek.THURSDAY) {
+            // Period 1: Mon-Thu. Max allowed date is this week's Thursday.
+            java.time.LocalDate thisThursday = today.plusDays(java.time.DayOfWeek.THURSDAY.getValue() - todayDay.getValue());
+            if (targetDate.isAfter(thisThursday)) {
+                throw new IllegalStateException("You can't reserve for these days yet. Come back Friday at 00:00.");
+            }
+        } else {
+            // Period 2: Fri-Sun. Max allowed date is this week's Sunday.
+            java.time.LocalDate thisSunday = today.plusDays(java.time.DayOfWeek.SUNDAY.getValue() - todayDay.getValue());
+            if (targetDate.isAfter(thisSunday)) {
+                throw new IllegalStateException("You can't reserve for these days yet. Come back Monday at 00:00.");
             }
         }
 
@@ -252,6 +258,11 @@ public class ReservationService {
                 cancelledAt != null ? cancelledAt : LocalDateTime.now(clock);
         final LocalDateTime effectiveSlotStart =
                 slotStartAt != null ? slotStartAt : slotStartFromRecord(record);
+
+        if (effectiveCancelledAt.isAfter(effectiveSlotStart) || effectiveCancelledAt.isEqual(effectiveSlotStart)) {
+            throw new IllegalStateException("Cannot cancel a reservation after its start time has passed.");
+        }
+
         ActionResultDto result = cancellationScoringPolicy.evaluate(
                 reservationId, effectiveCancelledAt, effectiveSlotStart);
 
