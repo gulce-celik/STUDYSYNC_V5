@@ -262,7 +262,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
 
   static String _groupRoomLabel(String workspaceId) {
     final n = workspaceId.replaceFirst('group-', '');
-    return 'Oda $n';
+    return 'Room $n';
   }
 
   List<CourseOption> get _userCourses {
@@ -818,10 +818,23 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
         final sx = maxW / ReservationMockData.mapWidth;
         final sy = h / ReservationMockData.mapHeight;
         final layout = _layoutWorkspaces;
+        final plotted = _filteredWorkspaces.toList();
         final groupRooms = layout.where((w) => w.type == 'group').toList();
         final groupLabelY = groupRooms.isEmpty
             ? 220.0 * sy
             : (groupRooms.map((w) => w.y).reduce(math.min) * sy - 20).clamp(8.0, h - 28);
+
+        const deskCellW = 35;
+        const groupCellW = 70;
+        var minX = ReservationMockData.mapWidth;
+        var maxX = 0.0;
+        for (final ws in plotted) {
+          final cellW = ws.type == 'individual' ? deskCellW : groupCellW;
+          minX = math.min(minX, ws.x.toDouble());
+          maxX = math.max(maxX, ws.x.toDouble() + cellW);
+        }
+        final contentW = maxX > minX ? maxX - minX : ReservationMockData.mapWidth;
+        final offsetX = ((ReservationMockData.mapWidth - contentW) / 2 - minX) * sx;
 
         return ClipRRect(
           borderRadius: BorderRadius.circular(14),
@@ -873,7 +886,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
                   final op = _opacityForWorkspace(ws);
 
                   return Positioned(
-                    left: ws.x * sx,
+                    left: ws.x * sx + offsetX,
                     top: ws.y * sy,
                     width: w,
                     height: hi,
