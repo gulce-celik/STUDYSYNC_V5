@@ -2,6 +2,7 @@
 
 package com.studysync.domain.mapper;
 
+import com.studysync.domain.dto.GroupInviteSummaryDto;
 import com.studysync.domain.dto.ReservationDetailDto;
 import com.studysync.domain.dto.ReservationSummaryDto;
 import com.studysync.domain.entity.ReservationRecord;
@@ -33,9 +34,18 @@ public final class ReservationMapper {
 
     public static ReservationDetailDto toDetail(
             ReservationRecord r, ObjectMapper objectMapper, String qrPayload) {
+        return toDetail(r, objectMapper, qrPayload, GroupInviteSummaryDto.none());
+    }
+
+    public static ReservationDetailDto toDetail(
+            ReservationRecord r,
+            ObjectMapper objectMapper,
+            String qrPayload,
+            GroupInviteSummaryDto inviteSummary) {
         if (r == null) {
             return null;
         }
+        GroupInviteSummaryDto summary = inviteSummary != null ? inviteSummary : GroupInviteSummaryDto.none();
         List<String> participants = parseParticipants(r.getParticipantsJson(), objectMapper);
         String qr = qrPayload != null ? qrPayload : "";
         return new ReservationDetailDto(
@@ -48,7 +58,9 @@ public final class ReservationMapper {
                 r.getCourseCode() != null ? r.getCourseCode() : "",
                 participants,
                 qr,
-                resolveScore(r));
+                resolveScore(r),
+                summary.expiresAt(),
+                summary.invitesConfirmed());
     }
 
     /**

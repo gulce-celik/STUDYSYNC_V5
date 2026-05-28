@@ -5,6 +5,7 @@ package com.studysync.domain.service;
 import com.studysync.domain.campus.WorkspaceQrRegistry;
 import com.studysync.domain.dto.ActionResultDto;
 import com.studysync.domain.dto.CreateReservationRequestDto;
+import com.studysync.domain.dto.GroupInviteSummaryDto;
 import com.studysync.domain.dto.ReservationDetailDto;
 import com.studysync.domain.dto.WorkspaceDto;
 import com.studysync.domain.entity.ReservationRecord;
@@ -69,24 +70,30 @@ public class ReservationService {
     private final CancellationScoringPolicy cancellationScoringPolicy;
     private final ReservationScoringPolicy reservationScoringPolicy;
     private final ReservationRecordRepository reservationRepository;
+    private final UserAccountRepository userAccountRepository;
     private final ResponsibilityScoreService responsibilityScoreService;
     private final ObjectMapper objectMapper;
     private final WorkspaceQrRegistry workspaceQrRegistry;
+    private final GroupInvitationService groupInvitationService;
     private final Clock clock;
 
     public ReservationService(CancellationScoringPolicy cancellationScoringPolicy,
             ReservationScoringPolicy reservationScoringPolicy,
             ReservationRecordRepository reservationRepository,
+            UserAccountRepository userAccountRepository,
             ResponsibilityScoreService responsibilityScoreService,
             ObjectMapper objectMapper,
             WorkspaceQrRegistry workspaceQrRegistry,
+            GroupInvitationService groupInvitationService,
             Clock clock) {
         this.cancellationScoringPolicy = cancellationScoringPolicy;
         this.reservationScoringPolicy = reservationScoringPolicy;
         this.reservationRepository = reservationRepository;
+        this.userAccountRepository = userAccountRepository;
         this.responsibilityScoreService = responsibilityScoreService;
         this.objectMapper = objectMapper;
         this.workspaceQrRegistry = workspaceQrRegistry;
+        this.groupInvitationService = groupInvitationService;
         this.clock = clock;
     }
 
@@ -176,6 +183,12 @@ public class ReservationService {
                     user.getResponsibilityScore() + ", you can make " + dailyLimit + " reservations per day.");
         }
 
+        boolean isGroup = "GROUP".equalsIgnoreCase(request.reservationType());
+        boolean hasParticipants = request.participantNicknames() != null && !request.participantNicknames().isEmpty();
+        if (isGroup || hasParticipants) {
+            validateGroupParticipants(user, request.participantNicknames());
+        }
+
         // Map and Save
         ReservationRecord record = new ReservationRecord();
         record.setUser(user);
@@ -213,8 +226,12 @@ public class ReservationService {
         }
 
         ReservationRecord saved = reservationRepository.save(record);
+        if (isGroup || hasParticipants) {
+            groupInvitationService.createInvitesFor(saved, request.participantNicknames());
+        }
+        var inviteSummary = groupInvitationService.summaryForReservation(saved.getId());
         return ReservationMapper.toDetail(
-                saved, objectMapper, workspaceQrRegistry.qrFor(saved.getWorkspaceId()));
+                saved, objectMapper, workspaceQrRegistry.qrFor(saved.getWorkspaceId()), inviteSummary);
     }
 
     public List<ReservationDetailDto> myReservations() {
@@ -225,10 +242,15 @@ public class ReservationService {
             return List.of();
         }
         UserAccount currentUser = (UserAccount) principal;
-        List<ReservationRecord> records = reservationRepository
-                .findByUser_IdOrderByDateDescSlotIdAsc(currentUser.getId());
+        List<ReservationRecord> records = reservationRepository.findVisibleToUser(currentUser.getId());
+        List<Long> ids = records.stream().map(ReservationRecord::getId).toList();
+        var summaries = groupInvitationService.summariesForReservations(ids);
         return records.stream()
-                .map(r -> ReservationMapper.toDetail(r, objectMapper, workspaceQrRegistry.qrFor(r.getWorkspaceId())))
+                .map(r -> ReservationMapper.toDetail(
+                        r,
+                        objectMapper,
+                        workspaceQrRegistry.qrFor(r.getWorkspaceId()),
+                        summaries.getOrDefault(r.getId(), GroupInviteSummaryDto.none())))
                 .collect(Collectors.toList());
     }
 
@@ -299,6 +321,25 @@ public class ReservationService {
         }
 
         return result;
+    }
+
+    private void validateGroupParticipants(UserAccount organizer, List<String> nicknames) {
+        if (nicknames == null || nicknames.isEmpty()) {
+            return;
+        }
+        String organizerNickname = organizer.getNickname();
+        for (String raw : nicknames) {
+            if (raw == null || raw.isBlank()) {
+                throw new IllegalStateException("Participant nickname cannot be empty.");
+            }
+            String nickname = raw.trim();
+            if (organizerNickname != null && nickname.equalsIgnoreCase(organizerNickname)) {
+                throw new IllegalStateException("You cannot add your own nickname as a participant.");
+            }
+            if (userAccountRepository.findByNicknameIgnoreCase(nickname).isEmpty()) {
+                throw new IllegalStateException("Participant not found: " + nickname);
+            }
+        }
     }
 
     private static LocalDateTime slotStartFromRecord(ReservationRecord record) {

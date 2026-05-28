@@ -16,6 +16,7 @@ import '../../reservation/domain/reservation_models.dart';
 import '../../reservations/presentation/my_bookings_screen.dart';
 import '../../notifications/data/notifications_controller.dart';
 import '../../notifications/presentation/widgets/notification_bell_button.dart';
+import '../data/group_invitations_api.dart';
 import '../data/home_mock_data.dart';
 
 /// Figma / React `Home.tsx` — hero, sorumluluk rozeti, gradient quick actions, upcoming, davetler.
@@ -27,7 +28,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late List<HomeGroupInvitation> _invitations;
+  final _groupInvitationsApi = GroupInvitationsApi();
+  List<HomeGroupInvitation> _invitations = [];
   final Set<String> _checkedInSessionIds = <String>{};
   int? _apiTotalReservations;
   int? _apiActiveToday;
@@ -43,10 +45,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _invitations = HomeMockData.initialInvitations();
     ResponsibilityLedger.instance.setHomeContext(mockOnly: HomeMockData.responsibilityScore);
     ResponsibilityLedger.instance.addListener(_onLedgerChanged);
     _loadDashboard();
+    unawaited(_loadInvitations());
     unawaited(NotificationsController.instance.refresh());
     unawaited(AiStudyController.instance.refreshFromServer());
   }
@@ -66,8 +68,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final apiScoreRaw = d['responsibilityScore'];
       if (!mounted) return;
       setState(() {
-        // No group-invitations API yet — sample rows for UI demo only.
-        _invitations = HomeMockData.initialInvitations();
         final apiScore = apiScoreRaw is num ? apiScoreRaw.toInt() : HomeMockData.responsibilityScore;
         ResponsibilityLedger.instance.setHomeContext(mockOnly: apiScore);
         if (quickStats is Map<String, dynamic>) {
@@ -100,16 +100,47 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _acceptInvitation(String id) {
-    setState(() => _invitations = _invitations.where((e) => e.id != id).toList());
-    NotificationsController.instance.removeByRelatedId(id);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Accepted!')));
+  Future<void> _loadInvitations() async {
+    try {
+      final pending = await _groupInvitationsApi.fetchPending();
+      if (!mounted) return;
+      setState(() => _invitations = pending);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _invitations = const []);
+    }
   }
 
-  void _rejectInvitation(String id) {
-    setState(() => _invitations = _invitations.where((e) => e.id != id).toList());
-    NotificationsController.instance.removeByRelatedId(id);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rejected')));
+  Future<void> _acceptInvitation(String id) async {
+    try {
+      await _groupInvitationsApi.accept(id);
+      if (!mounted) return;
+      setState(() => _invitations = _invitations.where((e) => e.id != id).toList());
+      NotificationsController.instance.removeByRelatedId(id);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Accepted!')));
+      unawaited(_loadInvitations());
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not accept invitation. Try again.')),
+      );
+    }
+  }
+
+  Future<void> _rejectInvitation(String id) async {
+    try {
+      await _groupInvitationsApi.decline(id);
+      if (!mounted) return;
+      setState(() => _invitations = _invitations.where((e) => e.id != id).toList());
+      NotificationsController.instance.removeByRelatedId(id);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rejected')));
+      unawaited(_loadInvitations());
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not decline invitation. Try again.')),
+      );
+    }
   }
 
   void _goTab(int index) => AppTabController.instance.selectTab(index);
@@ -652,7 +683,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(color: const Color(0xFFF3E8FF), borderRadius: BorderRadius.circular(8)),
                             child: Text(
-                              'Expires in: ${inv.expiresInMinutes} minutes',
+                              inv.expiresInMinutes > 0
+                                  ? 'Expires in: ${inv.expiresInMinutes} minutes'
+                                  : 'Invitation expired',
                               style: const TextStyle(fontSize: 11, color: Color(0xFF6B21A8), fontWeight: FontWeight.w700),
                             ),
                           ),

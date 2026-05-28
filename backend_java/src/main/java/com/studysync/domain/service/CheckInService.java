@@ -24,16 +24,19 @@ public class CheckInService {
     private final QrCheckInPolicy qrCheckInPolicy;
     private final ResponsibilityScoreService responsibilityScoreService;
     private final ReservationScoringPolicy reservationScoringPolicy;
+    private final GroupInvitationService groupInvitationService;
 
     public CheckInService(
             ReservationRecordRepository reservationRepository,
             QrCheckInPolicy qrCheckInPolicy,
             ResponsibilityScoreService responsibilityScoreService,
-            ReservationScoringPolicy reservationScoringPolicy) {
+            ReservationScoringPolicy reservationScoringPolicy,
+            GroupInvitationService groupInvitationService) {
         this.reservationRepository = reservationRepository;
         this.qrCheckInPolicy = qrCheckInPolicy;
         this.responsibilityScoreService = responsibilityScoreService;
         this.reservationScoringPolicy = reservationScoringPolicy;
+        this.groupInvitationService = groupInvitationService;
     }
 
     @org.springframework.transaction.annotation.Transactional
@@ -54,6 +57,10 @@ public class CheckInService {
 
         if (!"ACTIVE".equals(reservation.getStatus()) && !"PENDING".equals(reservation.getStatus())) {
             return new CheckInResultDto(false, "Reservation is not active or pending.");
+        }
+
+        if (groupInvitationService.hasUnconfirmedInvites(reservation.getId())) {
+            return new CheckInResultDto(false, "Waiting for group members to accept the invitation.");
         }
 
         String windowReason = qrCheckInPolicy.checkInRejectionReason(reservation);

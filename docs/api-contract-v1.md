@@ -33,6 +33,12 @@ default is `http://localhost:8080/api/v1` on iOS simulator / desktop; on **Andro
     - `scoreHistory` (ScoreHistoryEntry[]) — terminal reservations with `scoreChange` for Profile UI
 - `ScoreHistoryEntry`: `id`, `date`, `scoreChange`, `description`, `status`
 
+## Users
+
+- `GET /users/by-nickname/{nickname}`
+  - response: `UserSummary` when a registered user exists (exact nickname match)
+  - errors: `400` with `message` when nickname is empty or not found (used by group reservation Add flow)
+
 ## Reservation
 
 - `GET /reservations/workspaces?date=YYYY-MM-DD&slotId=slot-2&type=individual|group`
@@ -46,7 +52,7 @@ default is `http://localhost:8080/api/v1` on iOS simulator / desktop; on **Andro
     - `courseCode` (string)
     - `reservationType` (`INDIVIDUAL`|`GROUP`)
     - `allowStudyBuddy` (boolean)
-    - `participantNicknames` (string[])
+    - `participantNicknames` (string[]) — for `GROUP` bookings, each nickname must match an existing user exactly; the organizer cannot include their own nickname
   - response: `ReservationDetail`
 
 - `GET /reservations/me`
@@ -57,6 +63,28 @@ default is `http://localhost:8080/api/v1` on iOS simulator / desktop; on **Andro
     - `cancelledAt` (ISO datetime)
     - `slotStartAt` (ISO datetime)
   - response: `ActionResult`
+
+### Group invitations (15-minute unanimous accept)
+
+- GROUP reservations stay `ACTIVE`; `invitesConfirmed` is `false` until every invitee accepts.
+- `expiresAt` (ISO datetime) is `createdAt + 15 minutes` for GROUP bookings.
+- If any invitee declines or not everyone accepts before `expiresAt`, reservation becomes `CANCELLED`.
+
+- `GET /group-invitations/pending`
+  - response: `GroupInvitation[]` — `id`, `reservationId`, `organizerName`, `workspaceId`, `date`, `slotLabel`, `expiresAt`, `memberPreview`
+
+- `POST /group-invitations/{inviteId}/accept`
+
+- `POST /group-invitations/{inviteId}/decline`
+
+## Notifications
+
+- `GET /notifications`
+  - response: `Notification[]` — `id`, `type`, `title`, `body`, `createdAt`, `read`, `actionLabel`, `relatedId`
+
+- `PATCH /notifications/{id}/read`
+
+- `PATCH /notifications/read-all`
 
 ## QR Check-in
 

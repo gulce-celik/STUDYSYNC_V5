@@ -43,6 +43,8 @@ class ReservationDetail {
     this.checkedIn = false,
     this.qrPayload,
     this.score = 0,
+    this.expiresAt,
+    this.invitesConfirmed = true,
   });
 
   final String id;
@@ -57,8 +59,14 @@ class ReservationDetail {
   final String? qrPayload;
   /// Responsibility score delta on this reservation — {@code 0} at creation; updated on terminal events.
   final int score;
+  /// GROUP invite deadline from API (ISO-8601); null for individual bookings.
+  final String? expiresAt;
+  /// False while group invitees have not all accepted within 15 minutes.
+  final bool invitesConfirmed;
 
-  bool get isGroup => participants.length > 1;
+  bool get isGroup => participants.isNotEmpty;
+
+  bool get awaitingGroupConfirmation => expiresAt != null && !invitesConfirmed;
 
   factory ReservationDetail.fromJson(Map<String, dynamic> json) {
     final parts = json['participants'];
@@ -75,6 +83,10 @@ class ReservationDetail {
       checkedIn: json['checkedIn'] == true,
       qrPayload: json['qrPayload']?.toString(),
       score: _parseScore(json['score'] ?? json['scoreChange'] ?? json['score_change']),
+      expiresAt: json['expiresAt']?.toString(),
+      invitesConfirmed: json.containsKey('invitesConfirmed')
+          ? json['invitesConfirmed'] == true
+          : true,
     );
   }
 

@@ -11,6 +11,9 @@ Living log of shipped features — what was built, where it lives, how to verify
 | No-show auto-cancel (past dates) | Done | 2026-05-22 |
 | Lost & Found (backend) | Partial — known bugs | 2026-05-23 |
 | Study Buddy reports (backend + mobile POST) | Done — needs Render redeploy if 404 | 2026-05-25 |
+| Group invitations (15 min, ACTIVE while pending) | Done | 2026-05-29 |
+| Notifications inbox (backend) | Done | 2026-05-29 |
+| Nickname lookup + invitee bookings | Done | 2026-05-29 |
 
 ---
 
@@ -159,6 +162,89 @@ cd backend_java && mvnw test -Dtest=BuddyReportServiceTest
 
 ---
 
+## 6. Group reservation invitations (15 min)
+
+Unanimous accept window for GROUP bookings. Reservation stays **`ACTIVE`** while invites are pending; **`invitesConfirmed`** is computed from invite rows (no new columns on `reservations`).
+
+| Rule | Behavior |
+|------|----------|
+| Create GROUP | One `ReservationRecord` (organizer `user_id`); one `GroupReservationInvite` per nickname |
+| Window | `expiresAt` = `createdAt + 15 minutes` (`GroupInvitationPolicy.INVITE_TTL_MINUTES`) |
+| All accept | `invitesConfirmed: true` on `ReservationDetail` |
+| Decline or timeout | Reservation → `CANCELLED`, `score = 0`, no responsibility delta |
+| Check-in | Blocked until all invites accepted (`CheckInService`) |
+
+| Endpoint | Role |
+|----------|------|
+| `POST /reservations` (GROUP) | Creates booking + pending invites + `GROUP_INVITATION` notifications |
+| `GET /group-invitations/pending` | Invitee home card list |
+| `POST /group-invitations/{id}/accept` | Invitee accepts |
+| `POST /group-invitations/{id}/decline` | Cancels whole reservation |
+
+**Backend:** `GroupReservationInvite` entity, `GroupInvitationService`, `GroupInvitationController`, `GroupInvitationPolicy`, `ExpireGroupInvitesJob` (every minute); `ReservationDetailDto.expiresAt` / `invitesConfirmed` via `ReservationMapper` + `GroupInviteSummaryDto`; hook in `ReservationService.createReservation`.
+
+**Flutter:** `GroupInvitationsApi`, home screen live accept/decline (replaces mock when API up); `ReservationDetail.awaitingGroupConfirmation`; My Bookings banner; map toast after GROUP create; check-in guard in `CheckInWindow`.
+
+**Dev seed:** Bob’s `group-2` booking includes a pending invite for Alice (`DevDataInitializer`).
+
+```bash
+cd backend_java && mvnw test -Dtest=GroupInvitationServiceTest,ReservationServiceTest
+```
+
+**Verify:** Bobby creates GROUP with `Alice` + `Chuck` → Alice accepts → Chuck accepts → organizer `GET /reservations/me` shows `invitesConfirmed: true`; decline or wait 15+ min → `CANCELLED`.
+
+**Out of scope:** invitee can cancel; duplicate reservation rows per participant; React web client.
+
+---
+
+## 7. Notifications inbox (backend)
+
+In-app notification rows for group invites (and future event types).
+
+| Endpoint | Role |
+|----------|------|
+| `GET /notifications` | Current user’s inbox, newest first |
+| `PATCH /notifications/{id}/read` | Mark one read |
+| `PATCH /notifications/read-all` | Mark all read |
+
+**Backend:** `NotificationRecord`, `NotificationService`, `NotificationController`; `emitGroupInvitation` on invite create (`type` = `GROUP_INVITATION`, `relatedId` = invite id).
+
+**Flutter:** `NotificationsApi` already calls these routes; inbox uses live API when available (404/501 → demo seed).
+
+```bash
+cd backend_java && mvnw test
+```
+
+**Out of scope:** FCM/push, reservation reminders, moderation events from server.
+
+---
+
+## 8. Nickname lookup & invitee bookings
+
+Group **Add member** validates nicknames before submit; accepted invitees see the shared booking in My Bookings and dashboard upcoming.
+
+| Case | Behavior |
+|------|----------|
+| `GET /users/by-nickname/{nickname}` | `400` if empty/not found; `UserSummary` if found (case-insensitive) |
+| Reserve map **Add** | Flutter calls lookup API; invalid nicknames not added to list |
+| `GET /reservations/me` | Organizer **or** invitee with **ACCEPTED** invite (`findVisibleToUser`) |
+| Before accept | Invitee sees invite on Home only, not My Bookings |
+| Dashboard upcoming | Same visibility rule as My Bookings |
+
+**Backend:** `UserService`, `UserController`; `UserAccountRepository.findByNicknameIgnoreCase`; `ReservationRecordRepository.findVisibleToUser`; used in `ReservationService.myReservations` and `DashboardService.homeForCurrentUser`.
+
+**Flutter:** `users_api.dart`; async `_addNickname()` on `reservation_map_screen` with loading state on **Add**.
+
+```bash
+cd backend_java && mvnw test -Dtest=UserServiceTest,ReservationVisibilityTest
+```
+
+**Verify:** Add `Nobody` on map → error; add `Alice` → success; Alice accepts invite → `GET /reservations/me` as Alice includes `group-*` booking.
+
+**Out of scope:** invitee cancel; check-in by invitees (organizer-centric QR flow unchanged).
+
+---
+
 ## Backend TODO
 
 Tracked from [HANDOFF.md](../HANDOFF.md) (2026-05-22). Mobile-only work is omitted. Shipped backend work is in sections 1–3 above, not repeated here.
@@ -201,15 +287,18 @@ Tracked from [HANDOFF.md](../HANDOFF.md) (2026-05-22). Mobile-only work is omitt
 | [ ] | Real `StudyBuddyService.getSuggestions` | Replace empty API + mobile sample fallback |
 | [x] | Buddy report persistence | `POST /study-buddies/reports`, `GET /admin/buddy-reports`; mobile POST wired |
 | [ ] | Buddy report on prod (Render) | Redeploy backend; `GET /health` → `study-buddy-reports` in `features` |
-| [ ] | Group invitations API | Home invite card is still sample data |
+| [x] | Group invitations API | `GroupInvitationController`, mobile `GroupInvitationsApi`, home accept/decline — see **§6** |
+| [x] | `GET /users/by-nickname/{nickname}` | `UserController` + map **Add** validation — see **§8** |
+| [x] | Invitee bookings after accept | `findVisibleToUser` on `/reservations/me` + dashboard — see **§8** |
 
 ### Notifications
 
 | | Task | Notes |
 |---|------|--------|
-| [ ] | `GET /notifications` | Replace demo inbox (mobile 404 → mock) |
-| [ ] | `PATCH /notifications/{id}/read` + read-all | Unread counts |
-| [ ] | Server event emitters | Invite, reminder, moderation (push/FCM later per handoff) |
+| [x] | `GET /notifications` | `NotificationController` — mobile uses live inbox when route exists — see **§7** |
+| [x] | `PATCH /notifications/{id}/read` + read-all | Wired — see **§7** |
+| [x] | Server event: group invite | `NotificationService.emitGroupInvitation` on invite create |
+| [ ] | Server event emitters (other) | Reminder, moderation (push/FCM later per handoff) |
 
 ### Admin (`/admin/*`)
 
@@ -251,3 +340,6 @@ cd backend_java && mvn test
 | 2026-05-23 | Lost & Found — §4 **Known bugs**: Found *not found*, `reportedByUserId` missing, Render/deploy checklist |
 | 2026-05-24 | KVKK consent persistence — backend entity/DTO validation + Flutter API and session persistence |
 | 2026-05-25 | Study Buddy reports — `buddy_reports` entity, POST submit + admin GET OPEN list; `BuddyReportServiceTest` |
+| 2026-05-29 | Group invitations — 15 min accept, `ACTIVE` while pending, `ExpireGroupInvitesJob`, notifications, Flutter home + bookings UX |
+| 2026-05-29 | Nickname lookup — `GET /users/by-nickname`, map Add validation, `findVisibleToUser` for accepted invitees |
+| 2026-05-29 | DevDataInitializer fix — `emre` user fields no longer overwrite `alice` (startup `NULL email` bug) |

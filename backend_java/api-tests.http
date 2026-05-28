@@ -44,6 +44,23 @@ Authorization: Bearer BURAYA_TOKEN_YAPISTIR
 }
 
 ### =============================================
+### SENARYO 2.1b: Grup Rezervasyonu (dev nicknames: Alice, Bobby, Chuck)
+### =============================================
+POST http://localhost:8080/api/v1/reservations
+Content-Type: application/json
+Authorization: Bearer BURAYA_TOKEN_YAPISTIR
+
+{
+  "date": "2026-05-28",
+  "slotId": "slot-3",
+  "workspaceId": "group-1",
+  "courseCode": "CSE101",
+  "reservationType": "GROUP",
+  "allowStudyBuddy": false,
+  "participantNicknames": ["Alice", "Bobby", "Chuck"]
+}
+
+### =============================================
 ### SENARYO 2.2: Saat Cakismasi (Ayni slot, ayni gun)
 ### =============================================
 POST http://localhost:8080/api/v1/reservations
@@ -89,6 +106,48 @@ Authorization: Bearer BURAYA_TOKEN_YAPISTIR
   "reservationId": "1",
   "qrPayload": "BURAYA_QR_PAYLOAD_YAPISTIR"
 }
+
+### =============================================
+### SENARYO 2.3b: Nickname dogrulama (Alice mevcut)
+### =============================================
+GET http://localhost:8080/api/v1/users/by-nickname/Alice
+Authorization: Bearer BURAYA_TOKEN_YAPISTIR
+
+### =============================================
+### SENARYO 2.3c: Nickname dogrulama (bulunamadi)
+### =============================================
+GET http://localhost:8080/api/v1/users/by-nickname/Nobody
+Authorization: Bearer BURAYA_TOKEN_YAPISTIR
+
+### =============================================
+### SENARYO 2.4: Bekleyen grup davetleri (Alice token)
+### =============================================
+GET http://localhost:8080/api/v1/group-invitations/pending
+Authorization: Bearer BURAYA_ALICE_TOKEN
+
+### =============================================
+### SENARYO 2.5: Grup davetini kabul (invite id pending listesinden)
+### =============================================
+POST http://localhost:8080/api/v1/group-invitations/1/accept
+Authorization: Bearer BURAYA_ALICE_TOKEN
+
+### =============================================
+### SENARYO 2.6: Grup davetini reddet
+### =============================================
+POST http://localhost:8080/api/v1/group-invitations/1/decline
+Authorization: Bearer BURAYA_ALICE_TOKEN
+
+### =============================================
+### SENARYO 2.7: Bildirimler
+### =============================================
+GET http://localhost:8080/api/v1/notifications
+Authorization: Bearer BURAYA_ALICE_TOKEN
+
+### =============================================
+### SENARYO 2.8: Alice rezervasyonlari (accept sonrasi group-2 gorunmeli)
+### =============================================
+GET http://localhost:8080/api/v1/reservations/me
+Authorization: Bearer BURAYA_ALICE_TOKEN
 
 ### =============================================
 ### SENARYO 3.2: Rezervasyon Iptali (Erken iptal testi)

@@ -12,6 +12,7 @@ import '../../lost_found/lost_found_map_sync.dart';
 import '../../../shared/check_in/check_in_window.dart';
 import '../data/reservation_api.dart';
 import '../data/reservation_mock_data.dart';
+import '../data/users_api.dart';
 import '../domain/reservation_models.dart';
 import '../../../core/session/auth_session.dart';
 
@@ -30,6 +31,7 @@ class ReservationMapScreen extends StatefulWidget {
 
 class _ReservationMapScreenState extends State<ReservationMapScreen> {
   final _api = ReservationApi();
+  final _usersApi = UsersApi();
   late DateTime _selectedDate;
   String _selectedSlot = '';
   String _selectedCourse = '';
@@ -45,6 +47,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
   List<Workspace>? _remoteWorkspaces;
   bool _remoteLoading = false;
   bool _submittingReservation = false;
+  bool _validatingNickname = false;
   bool _hideAiShortcut = false;
 
   /// Workspaces with active lost-item reports from GET /lost-found.
@@ -445,15 +448,15 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
     _reloadWorkspacesFromServer();
   }
 
-  void _addNickname() {
+  Future<void> _addNickname() async {
     final ws = _workspaceById(_selectedWorkspaceId);
-    if (ws == null) return;
+    if (ws == null || _validatingNickname) return;
     final nick = _nicknameCtrl.text.trim();
     if (nick.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter nickname')));
       return;
     }
-    if (_groupNicknames.contains(nick)) {
+    if (_groupNicknames.any((n) => n.toLowerCase() == nick.toLowerCase())) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nickname already added')));
       return;
     }
@@ -463,10 +466,29 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
       );
       return;
     }
-    setState(() {
-      _groupNicknames.add(nick);
-      _nicknameCtrl.clear();
-    });
+    setState(() => _validatingNickname = true);
+    try {
+      final user = await _usersApi.lookupNickname(nick);
+      if (!mounted) return;
+      setState(() {
+        _groupNicknames.add(user.nickname);
+        _nicknameCtrl.clear();
+        _validatingNickname = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Added ${user.name}')),
+      );
+    } on NicknameLookupException catch (e) {
+      if (!mounted) return;
+      setState(() => _validatingNickname = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _validatingNickname = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not verify nickname. Is the backend running?')),
+      );
+    }
   }
 
   Future<void> _confirmReservation() async {
@@ -546,7 +568,11 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
       if (!mounted) return;
       final msg = instant
           ? 'Instant reservation confirmed (${created.id})'
-          : (_reservationType == ReservationType.group ? 'Invites sent (${created.id})' : 'Reservation confirmed (${created.id})');
+          : (_reservationType == ReservationType.group
+              ? (created.awaitingGroupConfirmation
+                  ? 'Invites sent — waiting for acceptance (15 min)'
+                  : 'Group reservation confirmed (${created.id})')
+              : 'Reservation confirmed (${created.id})');
       ResponsibilityLedger.instance.recordReservationConfirmed();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -1535,9 +1561,15 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: _addNickname,
+                onPressed: _validatingNickname ? null : _addNickname,
                 style: FilledButton.styleFrom(backgroundColor: const Color(0xFF9333EA)),
-                child: const Text('Add'),
+                child: _validatingNickname
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Add'),
               ),
             ],
           ),

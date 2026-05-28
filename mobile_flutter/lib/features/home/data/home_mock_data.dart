@@ -79,11 +79,32 @@ class HomeGroupInvitation {
   final String createdAt;
   final String expiresAt;
 
-  /// Dakika cinsinden (demo: createdAt / expiresAt farkı).
+  /// Minutes remaining until [expiresAt] (live API or demo).
   int get expiresInMinutes {
-    final c = DateTime.tryParse(createdAt);
-    final e = DateTime.tryParse(expiresAt);
-    if (c == null || e == null) return 10;
-    return e.difference(c).inMinutes.abs().clamp(1, 999);
+    final e = DateTime.tryParse(expiresAt.replaceFirst(' ', 'T'));
+    if (e == null) return 15;
+    final remaining = e.difference(DateTime.now()).inMinutes;
+    return remaining.clamp(0, 999);
+  }
+
+  factory HomeGroupInvitation.fromJson(Map<String, dynamic> json) {
+    final preview = json['memberPreview'];
+    String memberPreview = '';
+    if (preview is List) {
+      memberPreview = preview.map((e) => e.toString()).join(', ');
+    } else if (preview is String) {
+      memberPreview = preview;
+    }
+    final expiresRaw = json['expiresAt']?.toString() ?? '';
+    return HomeGroupInvitation(
+      id: json['id']?.toString() ?? '',
+      inviterName: json['organizerName']?.toString() ?? 'Someone',
+      workspaceId: json['workspaceId']?.toString() ?? '',
+      date: json['date']?.toString() ?? '',
+      slot: json['slotLabel']?.toString() ?? '',
+      createdAt: json['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
+      expiresAt: expiresRaw,
+      memberPreview: memberPreview,
+    );
   }
 }

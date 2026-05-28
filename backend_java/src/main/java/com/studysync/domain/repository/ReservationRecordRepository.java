@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Çalışma alanı rezervasyonları — Bookings, Home “today’s reservation”,
@@ -20,6 +22,19 @@ public interface ReservationRecordRepository extends JpaRepository<ReservationRe
     // Antigravity Modification: Added helper queries for overlaps, quotas, and
     // dashboard history mapping.
     List<ReservationRecord> findByUser_IdOrderByDateDescSlotIdAsc(Long userId);
+
+    @Query(
+            """
+            SELECT DISTINCT r FROM ReservationRecord r
+            WHERE r.user.id = :userId
+               OR EXISTS (
+                 SELECT 1 FROM GroupReservationInvite i
+                 WHERE i.reservation = r AND i.invitee.id = :userId
+                   AND i.status = 'ACCEPTED'
+               )
+            ORDER BY r.date DESC, r.slotId ASC
+            """)
+    List<ReservationRecord> findVisibleToUser(@Param("userId") Long userId);
 
     boolean existsByWorkspaceIdAndDateAndSlotIdAndStatusIn(String workspaceId, String date, String slotId,
             Collection<String> statuses);

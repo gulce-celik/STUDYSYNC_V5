@@ -2,11 +2,15 @@ package com.studysync.config;
 
 import com.studysync.domain.campus.WorkspaceQrRegistry;
 import com.studysync.domain.entity.CourseCatalogEntity;
+import com.studysync.domain.entity.GroupReservationInvite;
 import com.studysync.domain.entity.ReservationRecord;
 import com.studysync.domain.entity.UserAccount;
+import com.studysync.domain.policy.GroupInvitationPolicy;
 import com.studysync.domain.repository.CourseCatalogRepository;
+import com.studysync.domain.repository.GroupReservationInviteRepository;
 import com.studysync.domain.repository.ReservationRecordRepository;
 import com.studysync.domain.repository.UserAccountRepository;
+import java.time.Instant;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +27,7 @@ public class DevDataInitializer {
     @Bean
     public CommandLineRunner initDevData(UserAccountRepository userRepository,
             ReservationRecordRepository reservationRepository,
+            GroupReservationInviteRepository groupInviteRepository,
             CourseCatalogRepository courseRepository,
             PasswordEncoder passwordEncoder,
             WorkspaceQrRegistry workspaceQrRegistry) {
@@ -259,7 +264,18 @@ public class DevDataInitializer {
                 charlie.setKvkkAccepted(true);
                 charlie.setEnrolledCourses(new java.util.ArrayList<>(List.of("MATH221", "MATH241", "MATH281")));
 
-                userRepository.saveAll(List.of(alice, bob, charlie));
+                UserAccount emre = new UserAccount();
+                emre.setName("Emre Bardak");
+                emre.setNickname("emrebardak");
+                emre.setEmail("emre@std.yeditepe.edu.tr");
+                emre.setPasswordHash(passwordEncoder.encode("123456"));
+                emre.setDepartmentId("cse");
+                emre.setYear(1);
+                emre.setResponsibilityScore(95);
+                emre.setKvkkAccepted(true);
+                emre.setEnrolledCourses(new java.util.ArrayList<>(List.of("CSE344", "CSE331")));
+
+                userRepository.saveAll(List.of(alice, bob, charlie, emre));
 
                 if (reservationRepository.count() == 0) {
                     java.time.LocalDate today = java.time.LocalDate.now();
@@ -317,6 +333,16 @@ public class DevDataInitializer {
                     r5.setQrPayload(workspaceQrRegistry.qrFor("desk-7"));
 
                     reservationRepository.saveAll(List.of(r1, r2, r3, r4, r5));
+
+                    Instant inviteCreated = Instant.now();
+                    Instant inviteExpires = GroupInvitationPolicy.expiresAt(inviteCreated);
+                    GroupReservationInvite bobToAlice = new GroupReservationInvite();
+                    bobToAlice.setReservation(r2);
+                    bobToAlice.setInvitee(alice);
+                    bobToAlice.setStatus(GroupInvitationPolicy.STATUS_PENDING);
+                    bobToAlice.setCreatedAt(inviteCreated);
+                    bobToAlice.setExpiresAt(inviteExpires);
+                    groupInviteRepository.save(bobToAlice);
                 }
             }
         };

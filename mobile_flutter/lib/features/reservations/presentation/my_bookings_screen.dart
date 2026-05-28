@@ -325,6 +325,26 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                         _miniIcon(Icons.groups_2_outlined, 'Group (${r.participants.length})'),
                                     ],
                                   ),
+                                  if (r.awaitingGroupConfirmation) ...[
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF3E8FF),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFFE9D5FF)),
+                                      ),
+                                      child: const Text(
+                                        'Awaiting confirmations — invitees have 15 minutes to accept.',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF6B21A8),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                   if (_tab == _BookingsTab.history && r.showsHistoryScoreBadge) ...[
                                     const SizedBox(height: 8),
                                     Builder(

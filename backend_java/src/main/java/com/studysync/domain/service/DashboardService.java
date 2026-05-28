@@ -34,8 +34,7 @@ public class DashboardService {
         }
         UserAccount currentUser = (UserAccount) principal;
 
-        List<ReservationRecord> records =
-                reservationRepository.findByUser_IdOrderByDateDescSlotIdAsc(currentUser.getId());
+        List<ReservationRecord> records = reservationRepository.findVisibleToUser(currentUser.getId());
 
         List<ReservationSummaryDto> upcoming = records.stream()
                 .filter(r -> "ACTIVE".equals(r.getStatus()) || "PENDING".equals(r.getStatus()))
