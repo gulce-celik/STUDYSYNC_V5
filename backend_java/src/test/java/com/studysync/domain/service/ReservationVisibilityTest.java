@@ -2,6 +2,8 @@ package com.studysync.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -91,6 +93,8 @@ class ReservationVisibilityTest {
         when(reservationRepository.findVisibleToUser(2L)).thenReturn(List.of(groupBooking));
         when(groupInvitationService.summariesForReservations(List.of(10L)))
                 .thenReturn(java.util.Map.of(10L, new com.studysync.domain.dto.GroupInviteSummaryDto(null, true)));
+        when(groupInvitationService.checkInSummariesFor(any(), eq(2L)))
+                .thenReturn(java.util.Map.of(10L, new com.studysync.domain.dto.GroupCheckInSummaryDto(false, 0, 2)));
 
         try (MockedStatic<SecurityContextHolder> security = mockStatic(SecurityContextHolder.class)) {
             SecurityContext ctx = mock(SecurityContext.class);

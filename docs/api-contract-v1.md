@@ -95,7 +95,13 @@ default is `http://localhost:8080/api/v1` on iOS simulator / desktop; on **Andro
   - response:
     - `success` (boolean)
     - `message` (string)
+    - `completed` (boolean) — `true` when the reservation is fully complete (`COMPLETED`)
+    - `checkedInCount` (int) — members checked in so far (group)
+    - `requiredCount` (int) — members who must check in (group: organizer + accepted invitees; individual: `1`)
   - policy: allowed only on the reservation date, from **15 minutes before** slot start until **15 minutes after** slot start; QR must match the desk `qrCode`.
+  - **Individual:** one successful verify by the organizer completes the booking (`+5` responsibility score).
+  - **Group:** each accepted participant (organizer + invitees) must verify individually; reservation stays `ACTIVE` until all have checked in (`+5` per member on first verify). If the window closes with anyone missing, status becomes `NO_SHOW` and **every** required participant receives `-10`.
+  - Caller must be logged in as a participant on the reservation.
 
 ## Study Buddy
 
@@ -165,7 +171,7 @@ Used by the mobile weekly grid so study-time suggestions can avoid marked slots.
 - `UserSummary`: `id`, `name`, `nickname`, `email`, `department`, `year`
 - `ReservationSummary`: `id`, `workspaceId`, `date`, `slotLabel`, `status`
 - `Workspace`: `id`, `type`, `capacity`, `status`, `x`, `y`, `qrCode` (`desk-N` → desk number `N`, e.g. `desk-12` → `12`; `group-N` → `GN`)
-- `ReservationDetail`: `id`, `workspaceId`, `date`, `slotId`, `slotLabel`, `status`, `courseCode`, `participants`, `qrPayload`, `score` (`0` at creation; COMPLETED `+5`, NO_SHOW `−10`, CANCELLED per cancel policy)
+- `ReservationDetail`: `id`, `workspaceId`, `date`, `slotId`, `slotLabel`, `status`, `courseCode`, `participants`, `qrPayload`, `score` (`0` at creation; COMPLETED `+5`, NO_SHOW `−10`, CANCELLED per cancel policy), `expiresAt`, `invitesConfirmed`, `checkedIn` (current user), `groupCheckInDone`, `groupCheckInRequired` (`0` for individual bookings)
 - `StudyBuddySuggestion`: `userId`, `name`, `matchScore`, `commonCourses`, `commonTopics`
 - `BuddyReport`: `id`, `reportedUserId`, `reportedName`, `reporterLabel`, `reason`, `comment`, `createdAt` (ISO-8601), `status` (`OPEN`|`DISMISSED`|`RESOLVED`)
 - `Course`: `code`, `name`, `difficultyRating`, `ratingCount`

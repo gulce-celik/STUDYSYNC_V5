@@ -345,6 +345,26 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                       ),
                                     ),
                                   ],
+                                  if (r.awaitingGroupCheckIns && !r.awaitingGroupConfirmation) ...[
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEFF6FF),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                                      ),
+                                      child: Text(
+                                        'Group check-in: ${r.groupCheckInDone} of ${r.groupCheckInRequired} members checked in.',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1D4ED8),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                   if (_tab == _BookingsTab.history && r.showsHistoryScoreBadge) ...[
                                     const SizedBox(height: 8),
                                     Builder(
@@ -397,7 +417,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                             onPressed:
                                                 CheckInWindow.canCheckInNow(r) ? () => _openCheckIn(r) : null,
                                             icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
-                                            label: const Text('QR Check-In'),
+                                            label: Text(r.checkedIn ? 'Checked in' : 'QR Check-In'),
                                           ),
                                         ),
                                          if ((r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE') &&

@@ -45,6 +45,8 @@ class ReservationDetail {
     this.score = 0,
     this.expiresAt,
     this.invitesConfirmed = true,
+    this.groupCheckInDone = 0,
+    this.groupCheckInRequired = 0,
   });
 
   final String id;
@@ -63,10 +65,17 @@ class ReservationDetail {
   final String? expiresAt;
   /// False while group invitees have not all accepted within 15 minutes.
   final bool invitesConfirmed;
+  /// How many required members have checked in (group only).
+  final int groupCheckInDone;
+  /// Total members who must check in, including organizer (group only).
+  final int groupCheckInRequired;
 
-  bool get isGroup => participants.isNotEmpty;
+  bool get isGroup => groupCheckInRequired > 1 || participants.isNotEmpty;
 
   bool get awaitingGroupConfirmation => expiresAt != null && !invitesConfirmed;
+
+  bool get awaitingGroupCheckIns =>
+      isGroup && status == 'ACTIVE' && groupCheckInRequired > 0 && groupCheckInDone < groupCheckInRequired;
 
   factory ReservationDetail.fromJson(Map<String, dynamic> json) {
     final parts = json['participants'];
@@ -87,6 +96,8 @@ class ReservationDetail {
       invitesConfirmed: json.containsKey('invitesConfirmed')
           ? json['invitesConfirmed'] == true
           : true,
+      groupCheckInDone: _parseInt(json['groupCheckInDone']),
+      groupCheckInRequired: _parseInt(json['groupCheckInRequired']),
     );
   }
 
@@ -97,6 +108,13 @@ class ReservationDetail {
   }
 
   static int _parseScore(dynamic raw) {
+    if (raw == null) return 0;
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw.toString()) ?? 0;
+  }
+
+  static int _parseInt(dynamic raw) {
     if (raw == null) return 0;
     if (raw is int) return raw;
     if (raw is num) return raw.toInt();

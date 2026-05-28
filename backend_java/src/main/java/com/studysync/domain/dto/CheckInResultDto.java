@@ -2,5 +2,15 @@
 
 package com.studysync.domain.dto;
 
-/** Check-in yanıtı — sözleşme: success, message; ileride scoreChange genişletilebilir. */
-public record CheckInResultDto(boolean success, String message) {}
+/** Check-in response — success, message, and optional group progress. */
+public record CheckInResultDto(
+        boolean success,
+        String message,
+        boolean completed,
+        int checkedInCount,
+        int requiredCount) {
+
+    public static CheckInResultDto failure(String message) {
+        return new CheckInResultDto(false, message, false, 0, 0);
+    }
+}

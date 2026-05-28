@@ -16,8 +16,10 @@ import com.studysync.domain.dto.GroupInviteSummaryDto;
 import com.studysync.domain.entity.GroupReservationInvite;
 import com.studysync.domain.entity.ReservationRecord;
 import com.studysync.domain.entity.UserAccount;
+import com.studysync.domain.policy.GroupCheckInPolicy;
 import com.studysync.domain.policy.GroupInvitationPolicy;
 import com.studysync.domain.repository.GroupReservationInviteRepository;
+import com.studysync.domain.repository.ReservationCheckInRepository;
 import com.studysync.domain.repository.ReservationRecordRepository;
 import com.studysync.domain.repository.UserAccountRepository;
 import java.lang.reflect.Field;
@@ -49,6 +51,12 @@ class GroupInvitationServiceTest {
     private ReservationRecordRepository reservationRepository;
 
     @Mock
+    private ReservationCheckInRepository checkInRepository;
+
+    @Mock
+    private GroupCheckInPolicy groupCheckInPolicy;
+
+    @Mock
     private UserAccountRepository userAccountRepository;
 
     @Mock
@@ -68,6 +76,8 @@ class GroupInvitationServiceTest {
         service = new GroupInvitationService(
                 inviteRepository,
                 reservationRepository,
+                checkInRepository,
+                groupCheckInPolicy,
                 userAccountRepository,
                 notificationService,
                 objectMapper,

@@ -21,6 +21,9 @@ public record ReservationDetailDto(
         String qrPayload,
         int score,
         String expiresAt,
-        boolean invitesConfirmed
+        boolean invitesConfirmed,
+        boolean checkedIn,
+        int groupCheckInDone,
+        int groupCheckInRequired
 ) {
 }

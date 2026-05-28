@@ -12,6 +12,7 @@ Living log of shipped features — what was built, where it lives, how to verify
 | Lost & Found (backend) | Partial — known bugs | 2026-05-23 |
 | Study Buddy reports (backend + mobile POST) | Done — needs Render redeploy if 404 | 2026-05-25 |
 | Group invitations (15 min, ACTIVE while pending) | Done | 2026-05-29 |
+| Group per-user QR check-in (SR-09) | Done | 2026-05-29 |
 | Notifications inbox (backend) | Done | 2026-05-29 |
 | Nickname lookup + invitee bookings | Done | 2026-05-29 |
 
@@ -24,13 +25,17 @@ Per-reservation responsibility delta (`0` at create; updated on check-in / cance
 | Event | `score` |
 |-------|---------|
 | Create | `0` |
-| Check-in | `+5` |
+| Check-in (individual) | `+5` (organizer, one scan) |
+| Check-in (group) | `+5` per member on first scan; reservation `score` field `+5` when all complete |
+| Group no-show | `-10` for **every** required member (organizer + accepted invitees) |
 | Cancel ≥24h before slot | `+3` |
 | Cancel 1h–24h | `0` |
 | Cancel &lt;1h | `-5` |
 | No-show | `-10` |
 
-**Backend:** `ReservationRecord.score` (`score_change` column), `ReservationScoringPolicy`, `CancellationScoringPolicy`, `CheckInService`, `AutoCancelReservationJob`, `ReservationMapper.resolveScore` on `GET /reservations/me`.
+**Backend:** `ReservationRecord.score` (`score_change` column), `ReservationScoringPolicy`, `CancellationScoringPolicy`, `CheckInService`, `ReservationCheckIn`, `AutoCancelReservationJob`, `ReservationMapper.resolveScore` on `GET /reservations/me`.
+
+**Group note:** responsibility score deltas are applied per user via `ResponsibilityScoreService.applyDelta`; the reservation row `score` is still a single summary for History (organizer-centric).
 
 **Flutter:** `ReservationDetail.score`, `effectiveScore` (legacy `0` → infer +5 / -10), `my_bookings_screen`, `profile_screen`.
 
@@ -83,7 +88,9 @@ Scheduled job marks unchecked `ACTIVE` / `PENDING` reservations as `NO_SHOW` aft
 | `findByDateAndStatusIn(today, …)` | `findByDateLessThanEqualAndStatusIn(today, …)` |
 | `now` vs slot start time only | `now` vs `LocalDateTime` (date + slot start + 15 min) |
 
-**Backend:** `ReservationRecordRepository.findByDateLessThanEqualAndStatusIn`, `AutoCancelReservationJob` (`SlotStartTimeResolver`, `QrCheckInPolicy.GRACE_AFTER_START_MINUTES`), `ResponsibilityScoreService.applyDelta` with `ReservationScoringPolicy.NO_SHOW_SCORE` (`-10`).
+**Backend:** `ReservationRecordRepository.findByDateLessThanEqualAndStatusIn`, `AutoCancelReservationJob` (`SlotStartTimeResolver`, `QrCheckInPolicy.GRACE_AFTER_START_MINUTES`, `GroupCheckInPolicy`), `ResponsibilityScoreService.applyDelta` with `ReservationScoringPolicy.NO_SHOW_SCORE` (`-10`).
+
+**Group:** if not all required members checked in by deadline → `NO_SHOW` and `-10` applied to organizer + every accepted invitee (including members who already checked in).
 
 **Verify:** unit tests cover past-date stale reservations, today before/after deadline, exact deadline boundary, invalid date skip.
 
@@ -172,7 +179,7 @@ Unanimous accept window for GROUP bookings. Reservation stays **`ACTIVE`** while
 | Window | `expiresAt` = `createdAt + 15 minutes` (`GroupInvitationPolicy.INVITE_TTL_MINUTES`) |
 | All accept | `invitesConfirmed: true` on `ReservationDetail` |
 | Decline or timeout | Reservation → `CANCELLED`, `score = 0`, no responsibility delta |
-| Check-in | Blocked until all invites accepted (`CheckInService`) |
+| Check-in (invite phase) | Blocked until all invites accepted |
 
 | Endpoint | Role |
 |----------|------|
@@ -197,7 +204,52 @@ cd backend_java && mvnw test -Dtest=GroupInvitationServiceTest,ReservationServic
 
 ---
 
-## 7. Notifications inbox (backend)
+## 7. Group per-user QR check-in (SR-09)
+
+After invites are confirmed, **every required member** must scan the workspace QR within the check-in window. One shared `ReservationRecord`; per-user rows in `reservation_check_ins`.
+
+| Rule | Behavior |
+|------|----------|
+| Who must check in | Organizer + each invitee with `ACCEPTED` status |
+| Who can call verify | Logged-in participant only (`AccessDeniedException` otherwise) |
+| Per-user scan | Idempotent — second scan: success + “You already checked in.” |
+| Partial progress | Reservation stays `ACTIVE`; `groupCheckInDone` / `groupCheckInRequired` on `ReservationDetail` |
+| Each first scan | `+5` responsibility score for that user |
+| All checked in | Reservation → `COMPLETED` (no extra score on completion) |
+| Missed deadline | `NO_SHOW`; `-10` for **all** required members |
+
+| API field | Meaning |
+|-----------|---------|
+| `ReservationDetail.checkedIn` | Current user has a check-in row |
+| `ReservationDetail.groupCheckInDone` | Count of check-ins so far (0 for individual) |
+| `ReservationDetail.groupCheckInRequired` | Required headcount (0 for individual) |
+| `CheckInResult.completed` | `true` when reservation is fully `COMPLETED` |
+| `CheckInResult.checkedInCount` / `requiredCount` | Progress in verify response |
+
+| Endpoint | Role |
+|----------|------|
+| `POST /checkin/verify` | Record current user’s QR check-in; group stays `ACTIVE` until all in |
+
+**Backend:** `ReservationCheckIn` entity, `ReservationCheckInRepository`, `GroupCheckInPolicy`, `CheckInService` (auth + per-user `+5`), `GroupInvitationService.checkInSummariesFor`, `ReservationDetailDto` extensions, `AutoCancelReservationJob` group branch.
+
+**Flutter:** `ReservationDetail.groupCheckInDone` / `groupCheckInRequired`, `awaitingGroupCheckIns`; `CheckInWindow` disables QR when user already checked in but booking still `ACTIVE`; My Bookings group progress banner; check-in sheet shows partial success without closing until `completed: true`.
+
+```bash
+cd backend_java && mvnw test -Dtest=CheckInServiceTest,AutoCancelReservationJobTest
+```
+
+**Verify**
+
+1. Organizer creates GROUP; all invitees accept within 15 min.
+2. Organizer `POST /checkin/verify` → `success: true`, `completed: false`, message like `1 of 3`; reservation still `ACTIVE`.
+3. Each invitee verifies from their account → final member gets `completed: true`, status `COMPLETED`.
+4. Alternate: only 2 of 3 check in before slot start + 15 min → job marks `NO_SHOW`; all three users get `-10` on responsibility score.
+
+**Out of scope:** separate reservation row per participant; React web client.
+
+---
+
+## 8. Notifications inbox (backend)
 
 In-app notification rows for group invites (and future event types).
 
@@ -219,7 +271,7 @@ cd backend_java && mvnw test
 
 ---
 
-## 8. Nickname lookup & invitee bookings
+## 9. Nickname lookup & invitee bookings
 
 Group **Add member** validates nicknames before submit; accepted invitees see the shared booking in My Bookings and dashboard upcoming.
 
@@ -241,7 +293,7 @@ cd backend_java && mvnw test -Dtest=UserServiceTest,ReservationVisibilityTest
 
 **Verify:** Add `Nobody` on map → error; add `Alice` → success; Alice accepts invite → `GET /reservations/me` as Alice includes `group-*` booking.
 
-**Out of scope:** invitee cancel; check-in by invitees (organizer-centric QR flow unchanged).
+**Out of scope:** invitee cancel.
 
 ---
 
@@ -266,7 +318,8 @@ Tracked from [HANDOFF.md](../HANDOFF.md) (2026-05-22). Mobile-only work is omitt
 |---|------|--------|
 | [x] | Desk `qrPayload` on bookings | `WorkspaceQrRegistry`, `GET /reservations/me` |
 | [x] | QR check-in window (15 min) | `QrCheckInPolicy`, `POST /checkin/verify`, Istanbul TZ |
-| [x] | No-show job after grace window | `AutoCancelReservationJob` — includes past-date fix |
+| [x] | Group per-user check-in (SR-09) | `ReservationCheckIn`, all members must scan; `-10` all on group no-show — see **§7** |
+| [x] | No-show job after grace window | `AutoCancelReservationJob` — includes past-date fix + group incomplete branch |
 
 ### Lost & Found
 
@@ -288,15 +341,16 @@ Tracked from [HANDOFF.md](../HANDOFF.md) (2026-05-22). Mobile-only work is omitt
 | [x] | Buddy report persistence | `POST /study-buddies/reports`, `GET /admin/buddy-reports`; mobile POST wired |
 | [ ] | Buddy report on prod (Render) | Redeploy backend; `GET /health` → `study-buddy-reports` in `features` |
 | [x] | Group invitations API | `GroupInvitationController`, mobile `GroupInvitationsApi`, home accept/decline — see **§6** |
-| [x] | `GET /users/by-nickname/{nickname}` | `UserController` + map **Add** validation — see **§8** |
-| [x] | Invitee bookings after accept | `findVisibleToUser` on `/reservations/me` + dashboard — see **§8** |
+| [x] | `GET /users/by-nickname/{nickname}` | `UserController` + map **Add** validation — see **§9** |
+| [x] | Invitee bookings after accept | `findVisibleToUser` on `/reservations/me` + dashboard — see **§9** |
+| [x] | Group per-user check-in | `CheckInService` + `ReservationCheckIn` — see **§7** |
 
 ### Notifications
 
 | | Task | Notes |
 |---|------|--------|
-| [x] | `GET /notifications` | `NotificationController` — mobile uses live inbox when route exists — see **§7** |
-| [x] | `PATCH /notifications/{id}/read` + read-all | Wired — see **§7** |
+| [x] | `GET /notifications` | `NotificationController` — mobile uses live inbox when route exists — see **§8** |
+| [x] | `PATCH /notifications/{id}/read` + read-all | Wired — see **§8** |
 | [x] | Server event: group invite | `NotificationService.emitGroupInvitation` on invite create |
 | [ ] | Server event emitters (other) | Reminder, moderation (push/FCM later per handoff) |
 
@@ -342,4 +396,5 @@ cd backend_java && mvn test
 | 2026-05-25 | Study Buddy reports — `buddy_reports` entity, POST submit + admin GET OPEN list; `BuddyReportServiceTest` |
 | 2026-05-29 | Group invitations — 15 min accept, `ACTIVE` while pending, `ExpireGroupInvitesJob`, notifications, Flutter home + bookings UX |
 | 2026-05-29 | Nickname lookup — `GET /users/by-nickname`, map Add validation, `findVisibleToUser` for accepted invitees |
-| 2026-05-29 | DevDataInitializer fix — `emre` user fields no longer overwrite `alice` (startup `NULL email` bug) |
+| 2026-05-29 | Group per-user check-in — `ReservationCheckIn`, all members QR verify, `+5` each / `-10` all on group no-show; Flutter progress UX; `CheckInServiceTest` |
+

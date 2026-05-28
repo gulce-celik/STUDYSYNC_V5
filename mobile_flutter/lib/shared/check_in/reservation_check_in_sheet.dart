@@ -119,6 +119,17 @@ class _ReservationCheckInSheetState extends State<_ReservationCheckInSheet> {
         return;
       }
 
+      final completed = result['completed'] == true;
+      if (!completed) {
+        setState(() {
+          _loading = false;
+          _inlineMessage = _resultMessage(result);
+          _isError = false;
+        });
+        widget.onSuccess();
+        return;
+      }
+
       Navigator.of(context).pop();
       widget.onSuccess();
     } on DioException catch (e) {

@@ -118,6 +118,7 @@ class CheckInWindow {
   /// Opens 15 min before start; closes 15 min after start (reservation day only).
   static bool canCheckInNow(ReservationDetail r) {
     if (r.awaitingGroupConfirmation) return false;
+    if (r.checkedIn && r.status == 'ACTIVE') return false;
     if (!isReservationToday(r)) return false;
     final opens = windowOpensAt(r);
     final closes = windowClosesAt(r);
@@ -149,6 +150,9 @@ class CheckInWindow {
   static String? availabilityHint(ReservationDetail r) {
     if (r.awaitingGroupConfirmation) {
       return 'Waiting for group members to accept the invitation.';
+    }
+    if (r.checkedIn && r.status == 'ACTIVE' && r.awaitingGroupCheckIns) {
+      return 'You checked in (${r.groupCheckInDone}/${r.groupCheckInRequired}). Waiting for others.';
     }
     if (!isReservationToday(r)) {
       return 'Check-in opens on ${r.date}';

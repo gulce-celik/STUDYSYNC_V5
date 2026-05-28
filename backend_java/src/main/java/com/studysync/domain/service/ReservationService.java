@@ -5,6 +5,7 @@ package com.studysync.domain.service;
 import com.studysync.domain.campus.WorkspaceQrRegistry;
 import com.studysync.domain.dto.ActionResultDto;
 import com.studysync.domain.dto.CreateReservationRequestDto;
+import com.studysync.domain.dto.GroupCheckInSummaryDto;
 import com.studysync.domain.dto.GroupInviteSummaryDto;
 import com.studysync.domain.dto.ReservationDetailDto;
 import com.studysync.domain.dto.WorkspaceDto;
@@ -230,8 +231,13 @@ public class ReservationService {
             groupInvitationService.createInvitesFor(saved, request.participantNicknames());
         }
         var inviteSummary = groupInvitationService.summaryForReservation(saved.getId());
+        var checkInSummary = groupInvitationService.checkInSummaryFor(saved, user.getId());
         return ReservationMapper.toDetail(
-                saved, objectMapper, workspaceQrRegistry.qrFor(saved.getWorkspaceId()), inviteSummary);
+                saved,
+                objectMapper,
+                workspaceQrRegistry.qrFor(saved.getWorkspaceId()),
+                inviteSummary,
+                checkInSummary);
     }
 
     public List<ReservationDetailDto> myReservations() {
@@ -245,12 +251,14 @@ public class ReservationService {
         List<ReservationRecord> records = reservationRepository.findVisibleToUser(currentUser.getId());
         List<Long> ids = records.stream().map(ReservationRecord::getId).toList();
         var summaries = groupInvitationService.summariesForReservations(ids);
+        var checkInSummaries = groupInvitationService.checkInSummariesFor(records, currentUser.getId());
         return records.stream()
                 .map(r -> ReservationMapper.toDetail(
                         r,
                         objectMapper,
                         workspaceQrRegistry.qrFor(r.getWorkspaceId()),
-                        summaries.getOrDefault(r.getId(), GroupInviteSummaryDto.none())))
+                        summaries.getOrDefault(r.getId(), GroupInviteSummaryDto.none()),
+                        checkInSummaries.getOrDefault(r.getId(), GroupCheckInSummaryDto.none())))
                 .collect(Collectors.toList());
     }
 

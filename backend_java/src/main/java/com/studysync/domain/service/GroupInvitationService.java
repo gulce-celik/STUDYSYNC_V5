@@ -2,6 +2,7 @@ package com.studysync.domain.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.studysync.domain.dto.GroupCheckInSummaryDto;
 import com.studysync.domain.dto.GroupInvitationDto;
 import com.studysync.domain.dto.GroupInviteSummaryDto;
 import com.studysync.domain.entity.GroupReservationInvite;
@@ -9,8 +10,11 @@ import com.studysync.domain.entity.ReservationRecord;
 import com.studysync.domain.entity.UserAccount;
 import com.studysync.domain.exception.AccessDeniedException;
 import com.studysync.domain.exception.ResourceNotFoundException;
+import com.studysync.domain.entity.ReservationCheckIn;
+import com.studysync.domain.policy.GroupCheckInPolicy;
 import com.studysync.domain.policy.GroupInvitationPolicy;
 import com.studysync.domain.repository.GroupReservationInviteRepository;
+import com.studysync.domain.repository.ReservationCheckInRepository;
 import com.studysync.domain.repository.ReservationRecordRepository;
 import com.studysync.domain.repository.UserAccountRepository;
 import com.studysync.security.SecurityUtils;
@@ -18,8 +22,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +35,8 @@ public class GroupInvitationService {
 
     private final GroupReservationInviteRepository inviteRepository;
     private final ReservationRecordRepository reservationRepository;
+    private final ReservationCheckInRepository checkInRepository;
+    private final GroupCheckInPolicy groupCheckInPolicy;
     private final UserAccountRepository userAccountRepository;
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
@@ -37,12 +45,16 @@ public class GroupInvitationService {
     public GroupInvitationService(
             GroupReservationInviteRepository inviteRepository,
             ReservationRecordRepository reservationRepository,
+            ReservationCheckInRepository checkInRepository,
+            GroupCheckInPolicy groupCheckInPolicy,
             UserAccountRepository userAccountRepository,
             NotificationService notificationService,
             ObjectMapper objectMapper,
             Clock clock) {
         this.inviteRepository = inviteRepository;
         this.reservationRepository = reservationRepository;
+        this.checkInRepository = checkInRepository;
+        this.groupCheckInPolicy = groupCheckInPolicy;
         this.userAccountRepository = userAccountRepository;
         this.notificationService = notificationService;
         this.objectMapper = objectMapper;
@@ -181,6 +193,86 @@ public class GroupInvitationService {
             return false;
         }
         return !GroupInvitationPolicy.invitesConfirmed(invites);
+    }
+
+    @Transactional(readOnly = true)
+    public GroupCheckInSummaryDto checkInSummaryFor(ReservationRecord reservation, Long currentUserId) {
+        if (!groupCheckInPolicy.isGroupReservation(reservation.getId())) {
+            boolean checkedIn = checkInRepository.existsByReservation_IdAndUser_Id(
+                    reservation.getId(), currentUserId);
+            if (!checkedIn && "COMPLETED".equals(reservation.getStatus())) {
+                checkedIn = reservation.getUser().getId().equals(currentUserId);
+            }
+            return GroupCheckInSummaryDto.individual(checkedIn);
+        }
+        Set<Long> required = groupCheckInPolicy.requiredParticipantUserIds(reservation);
+        int done = groupCheckInPolicy.checkedInCount(reservation.getId());
+        boolean userCheckedIn =
+                checkInRepository.existsByReservation_IdAndUser_Id(reservation.getId(), currentUserId);
+        return new GroupCheckInSummaryDto(userCheckedIn, done, required.size());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, GroupCheckInSummaryDto> checkInSummariesFor(
+            List<ReservationRecord> reservations, Long currentUserId) {
+        if (reservations == null || reservations.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = reservations.stream().map(ReservationRecord::getId).toList();
+        List<GroupReservationInvite> allInvites = inviteRepository.findByReservation_IdIn(ids);
+        Set<Long> groupReservationIds = allInvites.stream()
+                .map(i -> i.getReservation().getId())
+                .collect(Collectors.toSet());
+
+        List<ReservationCheckIn> allCheckIns = checkInRepository.findByReservation_IdIn(ids);
+        Map<Long, Set<Long>> checkedUsersByReservation = new HashMap<>();
+        for (ReservationCheckIn ci : allCheckIns) {
+            checkedUsersByReservation
+                    .computeIfAbsent(ci.getReservation().getId(), k -> new HashSet<>())
+                    .add(ci.getUser().getId());
+        }
+
+        Map<Long, List<GroupReservationInvite>> invitesByReservation =
+                allInvites.stream().collect(Collectors.groupingBy(i -> i.getReservation().getId()));
+
+        Map<Long, GroupCheckInSummaryDto> result = new HashMap<>();
+        for (ReservationRecord r : reservations) {
+            Long id = r.getId();
+            if (!groupReservationIds.contains(id)) {
+                boolean checkedIn = checkedUsersByReservation
+                        .getOrDefault(id, Set.of())
+                        .contains(currentUserId);
+                if (!checkedIn && "COMPLETED".equals(r.getStatus())) {
+                    checkedIn = r.getUser().getId().equals(currentUserId);
+                }
+                result.put(id, GroupCheckInSummaryDto.individual(checkedIn));
+            } else {
+                Set<Long> required = new HashSet<>();
+                required.add(r.getUser().getId());
+                for (GroupReservationInvite inv :
+                        invitesByReservation.getOrDefault(id, List.of())) {
+                    if (GroupInvitationPolicy.STATUS_ACCEPTED.equals(inv.getStatus())) {
+                        required.add(inv.getInvitee().getId());
+                    }
+                }
+                int done = checkedUsersByReservation.getOrDefault(id, Set.of()).size();
+                boolean userCheckedIn = checkedUsersByReservation
+                        .getOrDefault(id, Set.of())
+                        .contains(currentUserId);
+                result.put(id, new GroupCheckInSummaryDto(userCheckedIn, done, required.size()));
+            }
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Set<Long> requiredParticipantUserIds(ReservationRecord reservation) {
+        return groupCheckInPolicy.requiredParticipantUserIds(reservation);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isGroupReservation(Long reservationId) {
+        return groupCheckInPolicy.isGroupReservation(reservationId);
     }
 
     private boolean cancelReservationForInviteFailure(Long reservationId) {

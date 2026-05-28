@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.studysync.domain.entity.ReservationRecord;
 import com.studysync.domain.entity.UserAccount;
+import com.studysync.domain.policy.GroupCheckInPolicy;
 import com.studysync.domain.policy.ReservationScoringPolicy;
 import com.studysync.domain.repository.ReservationRecordRepository;
 import com.studysync.domain.service.ResponsibilityScoreService;
@@ -19,6 +20,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +38,9 @@ class AutoCancelReservationJobTest {
     @Mock
     private ResponsibilityScoreService responsibilityScoreService;
 
+    @Mock
+    private GroupCheckInPolicy groupCheckInPolicy;
+
     private final ReservationScoringPolicy scoringPolicy = new ReservationScoringPolicy();
 
     private AutoCancelReservationJob job;
@@ -46,7 +51,9 @@ class AutoCancelReservationJobTest {
                 reservationRepository,
                 responsibilityScoreService,
                 scoringPolicy,
+                groupCheckInPolicy,
                 fixedClock("2026-05-22T10:00:00"));
+        lenient().when(groupCheckInPolicy.isGroupReservation(any())).thenReturn(false);
     }
 
     @Test
@@ -119,6 +126,38 @@ class AutoCancelReservationJobTest {
     }
 
     @Test
+    void processRecordIfNoShow_groupIncomplete_penalizesAllParticipants() throws Exception {
+        ReservationRecord record = activeReservation("2026-05-22", "slot-2");
+        setEntityId(record, 5L);
+
+        when(groupCheckInPolicy.isGroupReservation(5L)).thenReturn(true);
+        when(groupCheckInPolicy.requiredParticipantUserIds(record)).thenReturn(Set.of(7L, 8L));
+        when(groupCheckInPolicy.allCheckedIn(5L, Set.of(7L, 8L))).thenReturn(false);
+
+        job.processRecordIfNoShow(record, LocalDateTime.parse("2026-05-22T09:16:00"));
+
+        assertEquals("NO_SHOW", record.getStatus());
+        verify(responsibilityScoreService).applyDelta(7L, ReservationScoringPolicy.NO_SHOW_SCORE);
+        verify(responsibilityScoreService).applyDelta(8L, ReservationScoringPolicy.NO_SHOW_SCORE);
+    }
+
+    @Test
+    void processRecordIfNoShow_groupAllCheckedIn_skipsNoShow() throws Exception {
+        ReservationRecord record = activeReservation("2026-05-22", "slot-2");
+        setEntityId(record, 5L);
+
+        when(groupCheckInPolicy.isGroupReservation(5L)).thenReturn(true);
+        when(groupCheckInPolicy.requiredParticipantUserIds(record)).thenReturn(Set.of(7L, 8L));
+        when(groupCheckInPolicy.allCheckedIn(5L, Set.of(7L, 8L))).thenReturn(true);
+
+        job.processRecordIfNoShow(record, LocalDateTime.parse("2026-05-22T09:16:00"));
+
+        assertEquals("ACTIVE", record.getStatus());
+        verify(reservationRepository, never()).saveAndFlush(any());
+        verify(responsibilityScoreService, never()).applyDelta(any(Long.class), any(Integer.class));
+    }
+
+    @Test
     void processRecordIfNoShow_skipsInvalidDate() {
         ReservationRecord record = activeReservation("not-a-date", "slot-2");
 
@@ -144,5 +183,11 @@ class AutoCancelReservationJobTest {
     private static Clock fixedClock(String campusLocalDateTime) {
         Instant instant = LocalDateTime.parse(campusLocalDateTime).atZone(CAMPUS).toInstant();
         return Clock.fixed(instant, CAMPUS);
+    }
+
+    private static void setEntityId(Object entity, Long id) throws Exception {
+        java.lang.reflect.Field field = entity.getClass().getDeclaredField("id");
+        field.setAccessible(true);
+        field.set(entity, id);
     }
 }

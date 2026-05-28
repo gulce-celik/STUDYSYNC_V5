@@ -1,6 +1,7 @@
 package com.studysync.job;
 
 import com.studysync.domain.entity.ReservationRecord;
+import com.studysync.domain.policy.GroupCheckInPolicy;
 import com.studysync.domain.policy.QrCheckInPolicy;
 import com.studysync.domain.policy.ReservationScoringPolicy;
 import com.studysync.domain.policy.SlotStartTimeResolver;
@@ -11,6 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
  * Marks unchecked reservations as {@code NO_SHOW} when the QR check-in window closes
  * ({@link QrCheckInPolicy#GRACE_AFTER_START_MINUTES} after slot start) and applies the
  * responsibility score penalty ({@link ReservationScoringPolicy#NO_SHOW_SCORE}).
+ *
+ * <p>Group bookings: all required participants must have checked in; otherwise every participant
+ * receives the no-show penalty.
  */
 @Component
 public class AutoCancelReservationJob {
@@ -30,16 +35,19 @@ public class AutoCancelReservationJob {
     private final ReservationRecordRepository reservationRepository;
     private final ResponsibilityScoreService responsibilityScoreService;
     private final ReservationScoringPolicy reservationScoringPolicy;
+    private final GroupCheckInPolicy groupCheckInPolicy;
     private final Clock clock;
 
     public AutoCancelReservationJob(
             ReservationRecordRepository reservationRepository,
             ResponsibilityScoreService responsibilityScoreService,
             ReservationScoringPolicy reservationScoringPolicy,
+            GroupCheckInPolicy groupCheckInPolicy,
             Clock clock) {
         this.reservationRepository = reservationRepository;
         this.responsibilityScoreService = responsibilityScoreService;
         this.reservationScoringPolicy = reservationScoringPolicy;
+        this.groupCheckInPolicy = groupCheckInPolicy;
         this.clock = clock;
     }
 
@@ -84,20 +92,32 @@ public class AutoCancelReservationJob {
             return;
         }
 
+        if (groupCheckInPolicy.isGroupReservation(record.getId())) {
+            Set<Long> required = groupCheckInPolicy.requiredParticipantUserIds(record);
+            if (groupCheckInPolicy.allCheckedIn(record.getId(), required)) {
+                return;
+            }
+            applyNoShow(record, required);
+            return;
+        }
+
+        applyNoShow(record, Set.of(record.getUser().getId()));
+    }
+
+    private void applyNoShow(ReservationRecord record, Set<Long> participantUserIds) {
         final int noShowScore = reservationScoringPolicy.noShowScore();
         record.setStatus("NO_SHOW");
         record.setScore(noShowScore);
         reservationRepository.saveAndFlush(record);
 
-        Long userId = record.getUser().getId();
-        responsibilityScoreService.applyDelta(userId, noShowScore);
+        for (Long userId : participantUserIds) {
+            responsibilityScoreService.applyDelta(userId, noShowScore);
+        }
 
         logger.info(
-                "Reservation {} marked NO_SHOW (slot start {}, deadline {}). User {} score {}.",
+                "Reservation {} marked NO_SHOW. Penalty {} applied to {} participant(s).",
                 record.getId(),
-                slotStart,
-                deadline,
-                userId,
-                noShowScore);
+                noShowScore,
+                participantUserIds.size());
     }
 }

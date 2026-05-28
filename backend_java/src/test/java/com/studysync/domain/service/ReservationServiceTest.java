@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysync.domain.campus.WorkspaceQrRegistry;
 import com.studysync.domain.dto.CreateReservationRequestDto;
+import com.studysync.domain.dto.GroupCheckInSummaryDto;
 import com.studysync.domain.dto.GroupInviteSummaryDto;
 import com.studysync.domain.dto.ReservationDetailDto;
 import com.studysync.domain.entity.ReservationRecord;
@@ -99,6 +100,8 @@ class ReservationServiceTest {
         });
         when(groupInvitationService.summaryForReservation(99L))
                 .thenReturn(new GroupInviteSummaryDto("2026-05-28T08:15:00Z", false));
+        when(groupInvitationService.checkInSummaryFor(any(ReservationRecord.class), any()))
+                .thenReturn(GroupCheckInSummaryDto.none());
 
         runWithPrincipal(() -> {
             ReservationDetailDto result = service.createReservation(groupRequest(List.of("Alice")));

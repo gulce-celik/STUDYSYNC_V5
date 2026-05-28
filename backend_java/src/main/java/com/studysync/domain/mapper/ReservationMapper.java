@@ -2,6 +2,7 @@
 
 package com.studysync.domain.mapper;
 
+import com.studysync.domain.dto.GroupCheckInSummaryDto;
 import com.studysync.domain.dto.GroupInviteSummaryDto;
 import com.studysync.domain.dto.ReservationDetailDto;
 import com.studysync.domain.dto.ReservationSummaryDto;
@@ -34,7 +35,7 @@ public final class ReservationMapper {
 
     public static ReservationDetailDto toDetail(
             ReservationRecord r, ObjectMapper objectMapper, String qrPayload) {
-        return toDetail(r, objectMapper, qrPayload, GroupInviteSummaryDto.none());
+        return toDetail(r, objectMapper, qrPayload, GroupInviteSummaryDto.none(), GroupCheckInSummaryDto.none());
     }
 
     public static ReservationDetailDto toDetail(
@@ -42,10 +43,20 @@ public final class ReservationMapper {
             ObjectMapper objectMapper,
             String qrPayload,
             GroupInviteSummaryDto inviteSummary) {
+        return toDetail(r, objectMapper, qrPayload, inviteSummary, GroupCheckInSummaryDto.none());
+    }
+
+    public static ReservationDetailDto toDetail(
+            ReservationRecord r,
+            ObjectMapper objectMapper,
+            String qrPayload,
+            GroupInviteSummaryDto inviteSummary,
+            GroupCheckInSummaryDto checkInSummary) {
         if (r == null) {
             return null;
         }
         GroupInviteSummaryDto summary = inviteSummary != null ? inviteSummary : GroupInviteSummaryDto.none();
+        GroupCheckInSummaryDto checkIn = checkInSummary != null ? checkInSummary : GroupCheckInSummaryDto.none();
         List<String> participants = parseParticipants(r.getParticipantsJson(), objectMapper);
         String qr = qrPayload != null ? qrPayload : "";
         return new ReservationDetailDto(
@@ -60,7 +71,10 @@ public final class ReservationMapper {
                 qr,
                 resolveScore(r),
                 summary.expiresAt(),
-                summary.invitesConfirmed());
+                summary.invitesConfirmed(),
+                checkIn.checkedIn(),
+                checkIn.groupCheckInDone(),
+                checkIn.groupCheckInRequired());
     }
 
     /**
