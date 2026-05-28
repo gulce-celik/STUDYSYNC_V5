@@ -284,6 +284,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                       else
                         ..._visible.map((r) {
                           final (stBg, stFg) = _statusStyle(r.status);
+                          final slotStart = CheckInWindow.slotStartLocal(r);
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             elevation: 0,
@@ -379,8 +380,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                             label: const Text('QR Check-In'),
                                           ),
                                         ),
-                                        if ((r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE') &&
-                                            !DateTime.now().isAfter(CheckInWindow.slotStartLocal(r))) ...[
+                                         if ((r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE') &&
+                                             (slotStart == null || !DateTime.now().isAfter(slotStart))) ...[
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: OutlinedButton(
@@ -400,7 +401,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                     ],
                                   ] else if (_isActiveTab(r) &&
                                       (r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE') &&
-                                      !DateTime.now().isAfter(CheckInWindow.slotStartLocal(r)))
+                                      (slotStart == null || !DateTime.now().isAfter(slotStart)))
                                     Row(
                                       children: [
                                         Expanded(
