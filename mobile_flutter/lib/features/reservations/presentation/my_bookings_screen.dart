@@ -379,14 +379,16 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                             label: const Text('QR Check-In'),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        if (r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE')
+                                        if ((r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE') &&
+                                            !DateTime.now().isAfter(CheckInWindow.slotStartLocal(r))) ...[
+                                          const SizedBox(width: 8),
                                           Expanded(
                                             child: OutlinedButton(
                                               onPressed: () => _cancel(r),
                                               child: const Text('Cancel'),
                                             ),
                                           ),
+                                        ],
                                       ],
                                     ),
                                     if (CheckInWindow.availabilityHint(r) != null) ...[
@@ -397,7 +399,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                                       ),
                                     ],
                                   ] else if (_isActiveTab(r) &&
-                                      (r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE'))
+                                      (r.status.toUpperCase() == 'PENDING' || r.status.toUpperCase() == 'ACTIVE') &&
+                                      !DateTime.now().isAfter(CheckInWindow.slotStartLocal(r)))
                                     Row(
                                       children: [
                                         Expanded(

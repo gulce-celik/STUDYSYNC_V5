@@ -53,11 +53,14 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
   /// 0=Sun … 6=Sat (matches React `getDay()` semantics).
   late int _simulatedDay;
 
+  // A helper to get the system date.
+  DateTime get _now => DateTime.now();
+
   @override
   void initState() {
     super.initState();
     LostFoundMapSync.addListener(_reloadLostMarkers);
-    final now = DateTime.now();
+    final now = _now;
     // Antigravity Modification: Initialized with today's real date instead of a hardcoded 2026 date.
     _simulatedDay = _dartWeekdayToSun0(now.weekday);
     _selectedDate = now;
@@ -78,8 +81,17 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
   /// Antigravity Modification: Helper to link the Top Day Menu with the Calendar Date.
   /// When a day is selected, it calculates the corresponding calendar date.
   void _updateSimulatedDay(int dayIndex) {
-    final now = DateTime.now();
+    final now = _now;
     final currentSun0 = _dartWeekdayToSun0(now.weekday);
+
+    if (!_isDayIndexAllowed(dayIndex)) {
+      setState(() {
+        _simulatedDay = dayIndex;
+      });
+      _checkLeftOpenValidation();
+      return;
+    }
+
     int diff = dayIndex - currentSun0;
     // We don't want to go back in time for the selected date
     if (diff < 0) diff += 7;
@@ -90,6 +102,96 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
       _prunePastSelectedSlot();
     });
     _reloadWorkspacesFromServer();
+  }
+
+  /// Selectable date range based on weekly booking periods (Mon-Thu vs Fri-Sun).
+  ({DateTime first, DateTime last}) get _selectableDateRange {
+    final now = _now;
+    final today = DateTime(now.year, now.month, now.day);
+    final weekday = now.weekday; // 1 = Mon, ..., 7 = Sun
+
+    if (weekday >= 1 && weekday <= 4) {
+      // Period 1: Mon-Thu. Selectable is today to this week's Thursday.
+      final daysToThu = 4 - weekday;
+      final lastDate = today.add(Duration(days: daysToThu));
+      return (first: today, last: lastDate);
+    } else {
+      // Period 2: Fri-Sun. Selectable is today to this week's Sunday.
+      final daysToSun = 7 - weekday;
+      final lastDate = today.add(Duration(days: daysToSun));
+      return (first: today, last: lastDate);
+    }
+  }
+
+  /// Determines if a dayIndex (0 = Sun, ..., 6 = Sat) is allowed based on booking periods and past days.
+  bool _isDayIndexAllowed(int dayIndex) {
+    final now = _now;
+    final currentSun0 = _dartWeekdayToSun0(now.weekday);
+    final weekday = now.weekday; // 1 = Mon, ..., 7 = Sun
+
+    if (weekday >= 1 && weekday <= 4) {
+      // Period 1: Mon-Thu. Allowed indices: 1, 2, 3, 4.
+      if (dayIndex < 1 || dayIndex > 4) return false;
+      // Past day check
+      return dayIndex >= currentSun0;
+    } else {
+      // Period 2: Fri-Sun. Allowed indices: 5, 6, 0.
+      if (dayIndex != 5 && dayIndex != 6 && dayIndex != 0) return false;
+      
+      // Past day check (order Fri -> Sat -> Sun)
+      int order(int idx) {
+        if (idx == 5) return 0;
+        if (idx == 6) return 1;
+        return 2;
+      }
+      return order(dayIndex) >= order(currentSun0);
+    }
+  }
+
+  /// Validates selected day index for Period and Past Day restrictions (Left-Open/Edge-Case Fallback).
+  bool _checkLeftOpenValidation() {
+    final now = _now;
+    final currentSun0 = _dartWeekdayToSun0(now.weekday);
+    final weekday = now.weekday;
+
+    if (!_isDayIndexAllowed(_simulatedDay)) {
+      String message;
+      if (weekday >= 1 && weekday <= 4) {
+        // Mon-Thu Period
+        if (_simulatedDay == 5 || _simulatedDay == 6 || _simulatedDay == 0) {
+          message = "You can't reserve for these days yet. Come back Friday at 00:00.";
+        } else {
+          message = "You can't reserve for past days.";
+        }
+      } else {
+        // Fri-Sun Period
+        if (_simulatedDay >= 1 && _simulatedDay <= 4) {
+          message = "You can't reserve for these days yet. Come back Monday at 00:00.";
+        } else {
+          message = "You can't reserve for past days.";
+        }
+      }
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Warning'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _updateSimulatedDay(currentSun0);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return false;
+    }
+    return true;
   }
 
   @override
@@ -139,18 +241,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
   }
 
   bool get _canReserveAdvance {
-    final now = DateTime.now();
-    final todaySun0 = _dartWeekdayToSun0(now.weekday);
-    final isTodayMonday = todaySun0 == 1;
-    final isTodayFriday = todaySun0 == 5;
-
-    // Rule: On Monday/Friday, you can reserve for any day (advance booking window).
-    if (isTodayMonday || isTodayFriday) return true;
-
-    // Rule: Other days (Tue, Wed, Thu) can ONLY reserve for the current calendar day.
-    final selectedIso = _selectedDateIso;
-    final todayIso = DateTime(now.year, now.month, now.day).toString().split(' ').first;
-    return selectedIso == todayIso;
+    return _isDayIndexAllowed(_simulatedDay);
   }
 
   String get _currentDayName => _kDayNames[_simulatedDay];
@@ -315,6 +406,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
       '${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
 
   void _onWorkspaceTap(Workspace ws) {
+    if (!_checkLeftOpenValidation()) return;
     if (_typeMismatch(ws)) return;
 
     if (_lostAt(ws.id)) {
@@ -378,6 +470,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
   }
 
   Future<void> _confirmReservation() async {
+    if (!_checkLeftOpenValidation()) return;
     final block = ResponsibilityLedger.instance.canAttemptReservation();
     if (block != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(block)));
@@ -391,7 +484,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
     final instant = _isInstantDesk(_selectedWorkspaceId!);
     if (!_canReserveAdvance && !instant) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Advance booking only on Mon & Fri — or pick an instant slot')),
+        const SnackBar(content: Text('Advance booking not allowed at this time.')),
       );
       return;
     }
@@ -416,9 +509,24 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
       slotId: slotId,
       slotLabel: _selectedSlot,
     )) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This time slot has already started. Choose a later slot today or another day.'),
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Warning'),
+          content: const Text("This time slot has already started. Choose a later slot today or another day."),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(() {
+                  _selectedSlot = '';
+                });
+                _reloadWorkspacesFromServer();
+              },
+              child: const Text('OK'),
+            ),
+          ],
         ),
       );
       return;
@@ -571,8 +679,8 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
             _DayMenu(
               currentLabel: _currentDayName,
               selectedIndex: _simulatedDay,
-              // Antigravity Modification: Now calls the helper to sync date with day label.
               onSelect: _updateSimulatedDay,
+              isDayAllowed: _isDayIndexAllowed,
             ),
           ],
         ),
@@ -1036,18 +1144,14 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
                       onTap: _instantLocked
                           ? null
                           : () async {
-                              final now = DateTime.now();
-                              final todayStart = DateTime(now.year, now.month, now.day);
-                              final selectedStart = DateTime(
-                                _selectedDate.year,
-                                _selectedDate.month,
-                                _selectedDate.day,
-                              );
+                              final range = _selectableDateRange;
                               final d = await showDatePicker(
                                 context: context,
-                                initialDate: selectedStart.isBefore(todayStart) ? todayStart : _selectedDate,
-                                firstDate: todayStart,
-                                lastDate: DateTime(2027, 12, 31),
+                                initialDate: _selectedDate.isBefore(range.first)
+                                    ? range.first
+                                    : (_selectedDate.isAfter(range.last) ? range.last : _selectedDate),
+                                firstDate: range.first,
+                                lastDate: range.last,
                               );
                               if (d != null) {
                                 setState(() {
@@ -1297,16 +1401,13 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
 
   Widget _policyBanner() {
     String title;
-    final today = DateTime.now();
-    final isMon = today.weekday == DateTime.monday;
-    final isFri = today.weekday == DateTime.friday;
+    final now = _now;
+    final weekday = now.weekday;
 
-    if (isMon) {
-      title = 'Monday: reserve for whole week';
-    } else if (isFri) {
-      title = 'Friday: reserve Sat–Mon';
+    if (weekday >= 1 && weekday <= 4) {
+      title = 'Mon–Thu Period: reserve for Mon–Thu';
     } else {
-      title = '$_currentDayName: instant booking only';
+      title = 'Fri–Sun Period: reserve for Fri–Sun';
     }
     return Container(
       padding: const EdgeInsets.all(10),
@@ -1348,7 +1449,7 @@ class _ReservationMapScreenState extends State<ReservationMapScreen> {
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Mon opens Tue–Fri · Fri opens Sat–Mon · Bright desks may be cancelled slots',
+                'Access Mon–Thu to reserve Mon–Thu · Access Fri–Sun to reserve Fri–Sun',
                 style: TextStyle(fontSize: 10, height: 1.35, color: Color(0xFF92400E)),
               ),
             ),
@@ -1457,11 +1558,13 @@ class _DayMenu extends StatelessWidget {
     required this.currentLabel,
     required this.selectedIndex,
     required this.onSelect,
+    required this.isDayAllowed,
   });
 
   final String currentLabel;
   final int selectedIndex;
   final ValueChanged<int> onSelect;
+  final bool Function(int) isDayAllowed;
 
   @override
   Widget build(BuildContext context) {
@@ -1470,16 +1573,22 @@ class _DayMenu extends StatelessWidget {
       onSelected: onSelect,
       itemBuilder: (context) => List.generate(
         7,
-        (i) => PopupMenuItem(
-          value: i,
-          child: Text(
-            _kDayNames[i],
-            style: TextStyle(
-              fontWeight: i == selectedIndex ? FontWeight.w800 : FontWeight.w500,
-              color: i == selectedIndex ? const Color(0xFF2563EB) : null,
+        (i) {
+          final isEnabled = isDayAllowed(i);
+          return PopupMenuItem(
+            value: i,
+            enabled: true, // Keep clickable for warning pop-up testing
+            child: Text(
+              _kDayNames[i],
+              style: TextStyle(
+                fontWeight: i == selectedIndex ? FontWeight.w800 : FontWeight.w500,
+                color: i == selectedIndex
+                    ? const Color(0xFF2563EB)
+                    : (isEnabled ? null : Colors.grey.shade400),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
