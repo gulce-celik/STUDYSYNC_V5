@@ -33,6 +33,13 @@ class ResponsibilityLedger extends ChangeNotifier {
     notifyListeners();
   }
 
+  void syncWithScore(int score) {
+    _mockFallback = score;
+    _listingDelta = 0;
+    _listingsThisSession += 1;
+    notifyListeners();
+  }
+
   /// Called on every successful login. If [userId] differs from the previously
   /// active user, all per-session counters are reset so that one user's usage
   /// does not bleed into another user's session on the same device.

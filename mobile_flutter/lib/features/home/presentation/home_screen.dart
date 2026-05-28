@@ -34,7 +34,10 @@ class _HomeScreenState extends State<HomeScreen> {
   List<HomeUpcomingReservation>? _apiUpcomingReservations;
 
   void _onLedgerChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override

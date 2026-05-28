@@ -58,6 +58,106 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
   final _reportReason = TextEditingController();
   final _reportComment = TextEditingController();
   int _sectionIndex = 0;
+  List<Map<String, dynamic>> _myActiveListings = [];
+  bool _listingsLoading = false;
+
+  Future<void> _loadMyActiveListings() async {
+    setState(() => _listingsLoading = true);
+    try {
+      final list = await _api.getMyListings();
+      if (!mounted) return;
+      setState(() {
+        _myActiveListings = list;
+        _listingsLoading = false;
+      });
+    } on DioException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[StudyBuddy] _loadMyActiveListings error: $e');
+      }
+      if (!mounted) return;
+      setState(() {
+        _listingsLoading = false;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[StudyBuddy] _loadMyActiveListings error: $e');
+      }
+      if (!mounted) return;
+      setState(() {
+        _listingsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _completeListing(String id) async {
+    if (id.startsWith('local-')) {
+      setState(() {
+        _myActiveListings.removeWhere((item) => item['id']?.toString() == id);
+      });
+      _toast('Listing marked as completed (offline fallback).');
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      final res = await _api.completeListing(id);
+      if (!mounted) return;
+      if (_actionSuccess(res['success'])) {
+        _toast(res['message']?.toString() ?? 'Listing marked as completed.');
+        await _loadMyActiveListings();
+      } else {
+        _toast(res['message']?.toString() ?? 'Could not complete listing.');
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final msg = _dioErrorMessage(e, 'Could not complete listing');
+      _toast(msg);
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not complete listing.');
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _cancelListing(String id) async {
+    if (id.startsWith('local-')) {
+      setState(() {
+        _myActiveListings.removeWhere((item) => item['id']?.toString() == id);
+      });
+      _toast('Listing cancelled (offline fallback).');
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      final res = await _api.cancelListing(id);
+      if (!mounted) return;
+      if (_actionSuccess(res['success'])) {
+        final updatedScore = (res['updatedResponsibilityScore'] as num?)?.toInt();
+        if (updatedScore != null) {
+          ResponsibilityLedger.instance.syncWithScore(updatedScore);
+        }
+        _toast(res['message']?.toString() ?? 'Listing cancelled successfully.');
+        await _loadMyActiveListings();
+      } else {
+        _toast(res['message']?.toString() ?? 'Could not cancel listing.');
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final msg = _dioErrorMessage(e, 'Could not cancel listing');
+      _toast(msg);
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not cancel listing.');
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -67,6 +167,7 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
     _myListingCourse = _courseCode;
     _results = List.of(StudyBuddyMockData.buddies);
     _prepareAiBuddySuggestion();
+    _loadMyActiveListings();
   }
 
   @override
@@ -162,8 +263,11 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
       }
     }
     if (_preferredWeekday.isNotEmpty) {
+      final filterDay = _preferredWeekday.contains('-')
+          ? _weekdayFromDateIso(_preferredWeekday)
+          : _preferredWeekday;
       if (row.typicalWeekday != null && row.typicalWeekday!.isNotEmpty) {
-        if (row.typicalWeekday != _preferredWeekday) return false;
+        if (row.typicalWeekday != filterDay) return false;
       }
     }
     if (_focusFilter.isNotEmpty) {
@@ -299,7 +403,7 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
         return StudyBuddyMockRow(
           userId: m['userId']?.toString() ?? '',
           name: m['name']?.toString() ?? '',
-          matchScore: (m['matchScore'] as num?)?.toInt() ?? 0,
+          matchScore: ((m['matchScore'] as num?)?.toInt() ?? 0).clamp(0, 100),
           commonCourses: cc is List ? cc.map((e) => e.toString()).toList() : <String>[],
           commonTopics: ct is List ? ct.map((e) => e.toString()).toList() : <String>[],
           gender: m['gender']?.toString(),
@@ -457,7 +561,7 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
                             );
                             Navigator.pop(ctx);
                             if (!mounted) return;
-                            setState(() => _sectionIndex = 1);
+                            setState(() => _sectionIndex = 2);
                             _toast('Report submitted — see Previous tab.');
                           } on DioException catch (e) {
                             if (!ctx.mounted) return;
@@ -491,6 +595,9 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
   }
 
   Widget _buildSectionTabs(bool isDark) {
+    final activeCount = _myActiveListings
+        .where((l) => (l['status']?.toString() ?? 'ACTIVE').toUpperCase() == 'ACTIVE')
+        .length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Row(
@@ -506,11 +613,22 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
           Expanded(
             child: ChoiceChip(
               label: Text(
-                'Previous (${BuddyInteractionLog.entries.length})',
+                'My Listings ($activeCount)',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               selected: _sectionIndex == 1,
               onSelected: _loading ? null : (_) => setState(() => _sectionIndex = 1),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ChoiceChip(
+              label: const Text(
+                'Previous',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              selected: _sectionIndex == 2,
+              onSelected: _loading ? null : (_) => setState(() => _sectionIndex = 2),
             ),
           ),
         ],
@@ -518,9 +636,465 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
     );
   }
 
+  Widget _buildMyListingsTab(bool isDark) {
+    final activeListings = _myActiveListings
+        .where((l) => (l['status']?.toString() ?? 'ACTIVE').toUpperCase() == 'ACTIVE')
+        .toList();
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        FilledButton.icon(
+          onPressed: () {
+            setState(() {
+              final open = !_showMyListing;
+              _showMyListing = open;
+              if (open) {
+                _myListingCourse = _courseCode;
+                _myListingPreferredWeekday = _preferredWeekday;
+                _myListingPreferredSlotId = _slotId;
+                if (_myListingPurpose.isEmpty && _focusFilter.isNotEmpty) {
+                  if (_focusFilter == 'Exam prep') {
+                    _myListingPurpose = 'Exam prep';
+                  } else if (_focusFilter == 'Project work') {
+                    _myListingPurpose = 'Project / assignment';
+                  } else if (_focusFilter == 'Weekly reviews') {
+                    _myListingPurpose = 'Lecture / weekly review';
+                  }
+                }
+              }
+            });
+          },
+          icon: const Icon(Icons.person_add_alt_1_rounded),
+          label: const Text('Create My Study Buddy Listing'),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF9333EA),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+        ),
+        if (_showMyListing) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [const Color(0xFF1E1B2E), const Color(0xFF1A1523)]
+                    : [const Color(0xFFF5F3FF), const Color(0xFFFCE7F3)],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? const Color(0xFF4C1D95) : const Color(0xFFE9D5FF),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Post your listing',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? const Color(0xFFF3E8FF) : const Color(0xFF4C1D95),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Help others know why you want a buddy and when you usually study.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    height: 1.3,
+                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6B21A8),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ListenableBuilder(
+                  listenable: ResponsibilityLedger.instance,
+                  builder: (context, _) {
+                    final L = ResponsibilityLedger.instance;
+                    return Text(
+                      '${L.buddyDemoLine()}\n'
+                      'Used: ${L.listingsPosted}/${L.maxBuddyListingsPerSession} · '
+                      'Each post: −${ResponsibilityLedger.scoreCostPerBuddyListing} pt · '
+                      'Current: ${L.effectiveScore}%.',
+                      style: TextStyle(
+                        fontSize: 10,
+                        height: 1.25,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF7C3AED),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                Text('Course', style: _filterLabelStyle(isDark)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: _myListingCourse.isEmpty ? null : _myListingCourse,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                  ),
+                  decoration: _filterFieldDecoration(isDark),
+                  items: ReservationMockData.courses
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c.code,
+                          child: Text('${c.code} — ${c.name}', style: const TextStyle(fontSize: 13)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _myListingCourse = v ?? ''),
+                ),
+                const SizedBox(height: 10),
+                Text('What are you studying for? *', style: _filterLabelStyle(isDark)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: _myListingPurpose.isEmpty ? null : _myListingPurpose,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                  ),
+                  hint: const Text('Choose a goal'),
+                  decoration: _filterFieldDecoration(isDark),
+                  items: const [
+                    DropdownMenuItem(value: 'Exam prep', child: Text('Exam prep')),
+                    DropdownMenuItem(value: 'Project / assignment', child: Text('Project / assignment')),
+                    DropdownMenuItem(
+                      value: 'Homework & problem sets',
+                      child: Text('Homework & problem sets'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Lecture / weekly review',
+                      child: Text('Lecture / weekly review'),
+                    ),
+                    DropdownMenuItem(value: 'General study', child: Text('General study')),
+                    DropdownMenuItem(value: 'Other', child: Text('Other')),
+                  ],
+                  onChanged: (v) => setState(() => _myListingPurpose = v ?? ''),
+                ),
+                const SizedBox(height: 10),
+                Text('Preferred date (optional)', style: _filterLabelStyle(isDark)),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: () async {
+                    final now = DateTime.now();
+                    final todayDate = DateTime(now.year, now.month, now.day);
+                    final sundayDate = todayDate.add(Duration(days: 7 - now.weekday));
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: todayDate,
+                      firstDate: todayDate,
+                      lastDate: sundayDate,
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _myListingPreferredWeekday =
+                            "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                      });
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Ink(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 16,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF4B5563),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _myListingPreferredWeekday.isEmpty
+                                ? 'Select Preferred Date'
+                                : _myListingPreferredWeekday,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: _myListingPreferredWeekday.isEmpty
+                                  ? (isDark ? const Color(0xFF64748B) : const Color(0xFF9CA3AF))
+                                  : (isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A)),
+                            ),
+                          ),
+                        ),
+                        if (_myListingPreferredWeekday.isNotEmpty)
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _myListingPreferredWeekday = '';
+                              });
+                            },
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF4B5563),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text('Preferred time on campus (optional)', style: _filterLabelStyle(isDark)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: _myListingPreferredSlotId,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                  ),
+                  decoration: _filterFieldDecoration(isDark),
+                  items: ReservationMockData.timeSlots
+                      .map(
+                        (s) => DropdownMenuItem(
+                          value: s.id,
+                          child: Text(s.label, style: const TextStyle(fontSize: 13, height: 1.2)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _myListingPreferredSlotId = v ?? _myListingPreferredSlotId),
+                ),
+                const SizedBox(height: 10),
+                Text('Note (optional)', style: _filterLabelStyle(isDark)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _myListingNote,
+                  maxLines: 3,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                  ),
+                  decoration: _filterFieldDecoration(isDark).copyWith(
+                    alignLabelWithHint: true,
+                    hintText: 'e.g. library quiet floor, work in English…',
+                    hintStyle: TextStyle(
+                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF9CA3AF),
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListenableBuilder(
+                  listenable: ResponsibilityLedger.instance,
+                  builder: (context, _) {
+                    return FilledButton(
+                      onPressed: !_loading ? _submitMyListing : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: isDark ? const Color(0xFF7C3AED) : const Color(0xFF1E1B4B),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: _loading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Text('Post listing'),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        if (_listingsLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (activeListings.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.assignment_turned_in_outlined,
+                  size: 48,
+                  color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No active listings',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: isDark ? const Color(0xFFE5E7EB) : const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Create a study buddy listing to find partners and let others match with you.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else ...[
+          Text(
+            'Your Listings',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: isDark ? const Color(0xFFE5E7EB) : const Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...activeListings.map((l) {
+            final course = l['courseCode']?.toString() ?? '';
+            final purpose = l['purpose']?.toString() ?? '';
+            final day = l['preferredWeekday']?.toString() ?? '';
+            final slotId = l['preferredSlotId']?.toString() ?? '';
+            final note = l['note']?.toString() ?? '';
+            final status = l['status']?.toString() ?? 'ACTIVE';
+            final isActive = status.toUpperCase() == 'ACTIVE';
+            
+            var slotLabel = '';
+            for (final ts in ReservationMockData.timeSlots) {
+              if (ts.id == slotId) {
+                slotLabel = ts.label;
+                break;
+              }
+            }
+            
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          course,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                        (() {
+                          final Color chipBg;
+                          final Color chipText;
+                          if (status.toUpperCase() == 'ACTIVE') {
+                            chipBg = const Color(0xFFDBEAFE);
+                            chipText = const Color(0xFF1E40AF);
+                          } else if (status.toUpperCase() == 'COMPLETED') {
+                            chipBg = const Color(0xFFD1FAE5);
+                            chipText = const Color(0xFF065F46);
+                          } else {
+                            chipBg = const Color(0xFFFEE2E2);
+                            chipText = const Color(0xFF991B1B);
+                          }
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: chipBg,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              status.toUpperCase(),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: chipText,
+                                  fontSize: 10),
+                            ),
+                          );
+                        })(),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Goal: $purpose',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    if (day.isNotEmpty || slotLabel.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Prefers: ${[if (day.isNotEmpty) day, if (slotLabel.isNotEmpty) slotLabel].join(' · ')}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                      ),
+                    ],
+                    if (note.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Note: "$note"',
+                        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                    if (isActive) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: _loading ? null : () => _completeListing(l['id']?.toString() ?? ''),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF10B981),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              child: const Text('Complete', style: TextStyle(fontSize: 12)),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _loading ? null : () => _cancelListing(l['id']?.toString() ?? ''),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFEF4444),
+                                side: const BorderSide(color: Color(0xFFEF4444)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              child: const Text('Cancel', style: TextStyle(fontSize: 12)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
   Widget _buildPreviousTab(bool isDark) {
     final entries = BuddyInteractionLog.entries;
-    if (entries.isEmpty) {
+    final closedListings = _myActiveListings
+        .where((l) => (l['status']?.toString() ?? 'ACTIVE').toUpperCase() != 'ACTIVE')
+        .toList();
+
+    if (entries.isEmpty && closedListings.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -528,7 +1102,7 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
           Icon(Icons.history_rounded, size: 48, color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1)),
           const SizedBox(height: 12),
           Text(
-            'No reports yet',
+            'No history yet',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontWeight: FontWeight.w800,
@@ -538,7 +1112,7 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Use Report on a buddy card. Entries stay in this session until the backend stores moderation history.',
+            'Completed/cancelled listings and previous reports will appear here.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, height: 1.4, color: isDark ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280)),
           ),
@@ -548,36 +1122,136 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        Text(
-          'Session reports & comments',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: isDark ? const Color(0xFFE5E7EB) : const Color(0xFF111827)),
-        ),
-        const SizedBox(height: 8),
-        ...entries.map(
-          (e) => Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            child: ListTile(
-              title: Text(e.buddyName, style: const TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 4),
-                  Text('Reason: ${e.reportReason}', style: const TextStyle(fontSize: 12, height: 1.35)),
-                  if (e.comment.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text('Comment: ${e.comment}', style: const TextStyle(fontSize: 12, height: 1.35)),
-                  ],
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatReportTime(e.createdAt),
-                    style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF)),
-                  ),
-                ],
-              ),
-              isThreeLine: true,
+        if (closedListings.isNotEmpty) ...[
+          Text(
+            'Your Closed Listings',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: isDark ? const Color(0xFFE5E7EB) : const Color(0xFF111827),
             ),
           ),
-        ),
+          const SizedBox(height: 8),
+          ...closedListings.map((l) {
+            final course = l['courseCode']?.toString() ?? '';
+            final purpose = l['purpose']?.toString() ?? '';
+            final day = l['preferredWeekday']?.toString() ?? '';
+            final slotId = l['preferredSlotId']?.toString() ?? '';
+            final note = l['note']?.toString() ?? '';
+            final status = l['status']?.toString() ?? 'COMPLETED';
+            final isCompleted = status.toUpperCase() == 'COMPLETED';
+
+            var slotLabel = '';
+            for (final ts in ReservationMockData.timeSlots) {
+              if (ts.id == slotId) {
+                slotLabel = ts.label;
+                break;
+              }
+            }
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          course,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isCompleted ? const Color(0xFFD1FAE5) : const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            status.toUpperCase(),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: isCompleted ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Goal: $purpose',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    if (day.isNotEmpty || slotLabel.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Prefers: ${[if (day.isNotEmpty) day, if (slotLabel.isNotEmpty) slotLabel].join(' · ')}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                      ),
+                    ],
+                    if (note.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Note: "$note"',
+                        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 16),
+        ],
+        if (entries.isNotEmpty) ...[
+          Text(
+            'Session Reports & Comments',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: isDark ? const Color(0xFFE5E7EB) : const Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...entries.map(
+            (e) => Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                title: Text(e.buddyName, style: const TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 4),
+                    Text('Reason: ${e.reportReason}', style: const TextStyle(fontSize: 12, height: 1.35)),
+                    if (e.comment.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text('Comment: ${e.comment}', style: const TextStyle(fontSize: 12, height: 1.35)),
+                    ],
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatReportTime(e.createdAt),
+                      style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF)),
+                    ),
+                  ],
+                ),
+                isThreeLine: true,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -588,7 +1262,7 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
     return '${dt.day}/${dt.month}/${dt.year} $h:$m';
   }
 
-  void _submitMyListing() {
+  Future<void> _submitMyListing() async {
     if (_myListingCourse.isEmpty) {
       _toast('Select a course for your listing.');
       return;
@@ -597,11 +1271,79 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
       _toast('Select what you are studying for (exam, project, etc.).');
       return;
     }
+
+    setState(() => _loading = true);
+
+    try {
+      final res = await _api.createListing(
+        courseCode: _myListingCourse,
+        purpose: _myListingPurpose,
+        preferredWeekday: _myListingPreferredWeekday,
+        preferredSlotId: _myListingPreferredSlotId,
+        note: _myListingNote.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (_actionSuccess(res['success'])) {
+        final updatedScore = (res['updatedResponsibilityScore'] as num?)?.toInt() ??
+            ResponsibilityLedger.instance.effectiveScore;
+        ResponsibilityLedger.instance.syncWithScore(updatedScore);
+
+        var slotPart = '';
+        for (final ts in ReservationMockData.timeSlots) {
+          if (ts.id == _myListingPreferredSlotId) {
+            slotPart = ts.label;
+            break;
+          }
+        }
+        final dayPart = _myListingPreferredWeekday.isEmpty
+            ? 'any day'
+            : _myListingPreferredWeekday;
+        final details =
+            '$_myListingCourse · $_myListingPurpose · prefers $dayPart'
+            '${slotPart.isNotEmpty ? ' · $slotPart' : ''}';
+
+        _toast(
+          'Listing posted: $details '
+          '(Updated score: $updatedScore%)',
+        );
+
+        setState(() {
+          _showMyListing = false;
+          _myListingNote.clear();
+          _myListingPurpose = '';
+          _myListingPreferredWeekday = '';
+          _myListingPreferredSlotId = 'slot-2';
+          _loading = false;
+        });
+        await _loadMyActiveListings();
+        return;
+      } else {
+        setState(() => _loading = false);
+        _toast(res['message']?.toString() ?? 'Failed to post listing.');
+        return;
+      }
+    } on DioException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[StudyBuddy] createListing offline/failed fallback: $e');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[StudyBuddy] createListing offline/failed fallback: $e');
+      }
+    }
+
+    // Local Fallback simulation if backend offline
+    if (!mounted) return;
+    setState(() => _loading = false);
+
     final block = ResponsibilityLedger.instance.tryConsumeBuddyListing();
     if (block != null) {
       _toast(block);
       return;
     }
+
     var slotPart = '';
     for (final ts in ReservationMockData.timeSlots) {
       if (ts.id == _myListingPreferredSlotId) {
@@ -615,14 +1357,29 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
     final details =
         '$_myListingCourse · $_myListingPurpose · prefers $dayPart'
         '${slotPart.isNotEmpty ? ' · $slotPart' : ''}';
+
     _toast(
-      'Listing posted: $details '
+      'Listing posted (offline fallback): $details '
       '(-${ResponsibilityLedger.scoreCostPerBuddyListing} score → ${ResponsibilityLedger.instance.effectiveScore}%)',
     );
+
+    final localId = "local-${DateTime.now().millisecondsSinceEpoch}";
     setState(() {
+      _myActiveListings.add({
+        'id': localId,
+        'courseCode': _myListingCourse,
+        'purpose': _myListingPurpose,
+        'preferredWeekday': _myListingPreferredWeekday,
+        'preferredSlotId': _myListingPreferredSlotId,
+        'note': _myListingNote.text.trim(),
+        'status': 'ACTIVE',
+        'createdAt': DateTime.now().toIso8601String(),
+      });
       _showMyListing = false;
       _myListingNote.clear();
       _myListingPurpose = '';
+      _myListingPreferredWeekday = '';
+      _myListingPreferredSlotId = 'slot-2';
     });
   }
 
@@ -663,8 +1420,10 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
           _buildSectionTabs(isDark),
           Expanded(
             child: _sectionIndex == 1
-                ? _buildPreviousTab(isDark)
-                : ListView(
+                ? _buildMyListingsTab(isDark)
+                : _sectionIndex == 2
+                    ? _buildPreviousTab(isDark)
+                    : ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               children: [
                 if (_fromFallback)
@@ -828,214 +1587,6 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
-                FilledButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      final open = !_showMyListing;
-                      _showMyListing = open;
-                      if (open) {
-                        _myListingCourse = _courseCode;
-                        _myListingPreferredWeekday = _preferredWeekday;
-                        _myListingPreferredSlotId = _slotId;
-                        if (_myListingPurpose.isEmpty && _focusFilter.isNotEmpty) {
-                          if (_focusFilter == 'Exam prep') {
-                            _myListingPurpose = 'Exam prep';
-                          } else if (_focusFilter == 'Project work') {
-                            _myListingPurpose = 'Project / assignment';
-                          } else if (_focusFilter == 'Weekly reviews') {
-                            _myListingPurpose = 'Lecture / weekly review';
-                          }
-                        }
-                      }
-                    });
-                  },
-                  icon: const Icon(Icons.person_add_alt_1_rounded),
-                  label: const Text('Create My Study Buddy Listing'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF9333EA),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-                if (_showMyListing) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: isDark
-                            ? [const Color(0xFF1E1B2E), const Color(0xFF1A1523)]
-                            : [const Color(0xFFF5F3FF), const Color(0xFFFCE7F3)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isDark ? const Color(0xFF4C1D95) : const Color(0xFFE9D5FF),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Post your listing',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? const Color(0xFFF3E8FF) : const Color(0xFF4C1D95),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Help others know why you want a buddy and when you usually study.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            height: 1.3,
-                            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6B21A8),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        ListenableBuilder(
-                          listenable: ResponsibilityLedger.instance,
-                          builder: (context, _) {
-                            final L = ResponsibilityLedger.instance;
-                            return Text(
-                              '${L.buddyDemoLine()}\n'
-                              'Used: ${L.listingsPosted}/${L.maxBuddyListingsPerSession} · '
-                              'Each post: −${ResponsibilityLedger.scoreCostPerBuddyListing} pt · '
-                              'Current: ${L.effectiveScore}%.',
-                              style: TextStyle(
-                                fontSize: 10,
-                                height: 1.25,
-                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF7C3AED),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        Text('Course', style: _filterLabelStyle(isDark)),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          value: _myListingCourse.isEmpty ? null : _myListingCourse,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                          ),
-                          decoration: _filterFieldDecoration(isDark),
-                          items: ReservationMockData.courses
-                              .map(
-                                (c) => DropdownMenuItem(
-                                  value: c.code,
-                                  child: Text('${c.code} — ${c.name}', style: const TextStyle(fontSize: 13)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) => setState(() => _myListingCourse = v ?? ''),
-                        ),
-                        const SizedBox(height: 10),
-                        Text('What are you studying for? *', style: _filterLabelStyle(isDark)),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          value: _myListingPurpose.isEmpty ? null : _myListingPurpose,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                          ),
-                          hint: const Text('Choose a goal'),
-                          decoration: _filterFieldDecoration(isDark),
-                          items: const [
-                            DropdownMenuItem(value: 'Exam prep', child: Text('Exam prep')),
-                            DropdownMenuItem(value: 'Project / assignment', child: Text('Project / assignment')),
-                            DropdownMenuItem(
-                              value: 'Homework & problem sets',
-                              child: Text('Homework & problem sets'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Lecture / weekly review',
-                              child: Text('Lecture / weekly review'),
-                            ),
-                            DropdownMenuItem(value: 'General study', child: Text('General study')),
-                            DropdownMenuItem(value: 'Other', child: Text('Other')),
-                          ],
-                          onChanged: (v) => setState(() => _myListingPurpose = v ?? ''),
-                        ),
-                        const SizedBox(height: 10),
-                        Text('Preferred day (optional)', style: _filterLabelStyle(isDark)),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          value: _myListingPreferredWeekday.isEmpty ? null : _myListingPreferredWeekday,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                          ),
-                          decoration: _filterFieldDecoration(isDark),
-                          items: const [
-                            DropdownMenuItem(value: '', child: Text('No preference')),
-                            DropdownMenuItem(value: 'Mon', child: Text('Mon')),
-                            DropdownMenuItem(value: 'Tue', child: Text('Tue')),
-                            DropdownMenuItem(value: 'Wed', child: Text('Wed')),
-                            DropdownMenuItem(value: 'Thu', child: Text('Thu')),
-                            DropdownMenuItem(value: 'Fri', child: Text('Fri')),
-                            DropdownMenuItem(value: 'Sat', child: Text('Sat')),
-                            DropdownMenuItem(value: 'Sun', child: Text('Sun')),
-                          ],
-                          onChanged: (v) => setState(() => _myListingPreferredWeekday = v ?? ''),
-                        ),
-                        const SizedBox(height: 10),
-                        Text('Preferred time on campus (optional)', style: _filterLabelStyle(isDark)),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          value: _myListingPreferredSlotId,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                          ),
-                          decoration: _filterFieldDecoration(isDark),
-                          items: ReservationMockData.timeSlots
-                              .map(
-                                (s) => DropdownMenuItem(
-                                  value: s.id,
-                                  child: Text(s.label, style: const TextStyle(fontSize: 13, height: 1.2)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) => setState(() => _myListingPreferredSlotId = v ?? _myListingPreferredSlotId),
-                        ),
-                        const SizedBox(height: 10),
-                        Text('Note (optional)', style: _filterLabelStyle(isDark)),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: _myListingNote,
-                          maxLines: 3,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                          ),
-                          decoration: _filterFieldDecoration(isDark).copyWith(
-                            alignLabelWithHint: true,
-                            hintText: 'e.g. library quiet floor, work in English…',
-                            hintStyle: TextStyle(
-                              color: isDark ? const Color(0xFF64748B) : const Color(0xFF9CA3AF),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ListenableBuilder(
-                          listenable: ResponsibilityLedger.instance,
-                          builder: (context, _) {
-                            final can = ResponsibilityLedger.instance.canPostAnotherBuddyListing;
-                            return FilledButton(
-                              onPressed: can ? _submitMyListing : null,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: isDark ? const Color(0xFF7C3AED) : const Color(0xFF1E1B4B),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              child: const Text('Post listing'),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 10),
                 Material(
                   color: Colors.transparent,
@@ -1152,26 +1703,73 @@ class _StudyBuddyScreenState extends State<StudyBuddyScreen> {
                           onChanged: (v) => setState(() => _slotId = v ?? _slotId),
                         ),
                         const SizedBox(height: 12),
-                        Text('Preferred day (typical, optional)', style: _filterLabelStyle(isDark)),
+                        Text('Preferred date (optional)', style: _filterLabelStyle(isDark)),
                         const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          value: _preferredWeekday.isEmpty ? null : _preferredWeekday,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                        InkWell(
+                          onTap: () async {
+                            final now = DateTime.now();
+                            final todayDate = DateTime(now.year, now.month, now.day);
+                            final sundayDate = todayDate.add(Duration(days: 7 - now.weekday));
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: todayDate,
+                              firstDate: todayDate,
+                              lastDate: sundayDate,
+                            );
+                            if (picked != null) {
+                              setState(() {
+                                _preferredWeekday =
+                                    "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                              });
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Ink(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today_rounded,
+                                  size: 16,
+                                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF4B5563),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _preferredWeekday.isEmpty
+                                        ? 'Select Preferred Date'
+                                        : _preferredWeekday,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: _preferredWeekday.isEmpty
+                                          ? (isDark ? const Color(0xFF64748B) : const Color(0xFF9CA3AF))
+                                          : (isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A)),
+                                    ),
+                                  ),
+                                ),
+                                if (_preferredWeekday.isNotEmpty)
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _preferredWeekday = '';
+                                      });
+                                    },
+                                    child: Icon(
+                                      Icons.close_rounded,
+                                      size: 16,
+                                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF4B5563),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
-                          decoration: _filterFieldDecoration(isDark),
-                          items: const [
-                            DropdownMenuItem(value: '', child: Text('No preference')),
-                            DropdownMenuItem(value: 'Mon', child: Text('Mon')),
-                            DropdownMenuItem(value: 'Tue', child: Text('Tue')),
-                            DropdownMenuItem(value: 'Wed', child: Text('Wed')),
-                            DropdownMenuItem(value: 'Thu', child: Text('Thu')),
-                            DropdownMenuItem(value: 'Fri', child: Text('Fri')),
-                            DropdownMenuItem(value: 'Sat', child: Text('Sat')),
-                            DropdownMenuItem(value: 'Sun', child: Text('Sun')),
-                          ],
-                          onChanged: (v) => setState(() => _preferredWeekday = v ?? ''),
                         ),
                         const SizedBox(height: 12),
                         Text('Minimum session length (buddy offers)', style: _filterLabelStyle(isDark)),

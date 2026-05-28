@@ -18,6 +18,8 @@ public interface WeeklyScheduleBlockRepository extends JpaRepository<WeeklySched
     // Antigravity Modification: Renamed derived query to match the entity properties 'dayCode' and 'timeSlot'
     List<WeeklyScheduleBlockEntity> findByUser_IdOrderByDayCodeAscTimeSlotAsc(Long userId);
 
+    List<WeeklyScheduleBlockEntity> findByUser_IdIn(List<Long> userIds);
+
     @Modifying
     @Query("DELETE FROM WeeklyScheduleBlockEntity w WHERE w.user.id = :userId")
     void deleteByUser_Id(Long userId);

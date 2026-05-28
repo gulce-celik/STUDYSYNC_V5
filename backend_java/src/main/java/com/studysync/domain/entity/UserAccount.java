@@ -63,6 +63,9 @@ public class UserAccount implements UserDetails {
     @Column(name = "responsibility_score")
     private Integer responsibilityScore = 75;
 
+    @Column(name = "study_style", length = 64)
+    private String studyStyle;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_enrolled_courses", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "course_code")
@@ -140,6 +143,14 @@ public class UserAccount implements UserDetails {
 
     public void setResponsibilityScore(Integer responsibilityScore) {
         this.responsibilityScore = responsibilityScore;
+    }
+
+    public String getStudyStyle() {
+        return studyStyle;
+    }
+
+    public void setStudyStyle(String studyStyle) {
+        this.studyStyle = studyStyle;
     }
 
     public List<String> getEnrolledCourses() {
